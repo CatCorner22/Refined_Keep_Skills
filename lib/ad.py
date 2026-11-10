@@ -406,7 +406,7 @@ def cmd_regress(args):
 # Argument parser
 # --------------------------------------------------------------------------
 
-def _actions(parser, name):
+def _actions(parser):
     """Add a required set of action sub-parsers to ``parser`` and return it."""
     actions = parser.add_subparsers(dest="action", metavar="ACTION")
     actions.required = True
@@ -425,7 +425,7 @@ def build_parser():
 
     manifest = commands.add_parser("manifest", help="read manifest")
     manifest.set_defaults(handler=cmd_manifest)
-    actions = _actions(manifest, "manifest")
+    actions = _actions(manifest)
     record = actions.add_parser("record", help="record a file that was read or fetched")
     record.add_argument("path")
     record.add_argument("--range", action="append", default=[], metavar="A-B",
@@ -437,7 +437,7 @@ def build_parser():
 
     ledger = commands.add_parser("ledger", help="ledger of the user's permissions and limits")
     ledger.set_defaults(handler=cmd_ledger)
-    actions = _actions(ledger, "ledger")
+    actions = _actions(ledger)
     add = actions.add_parser("add", help="add an entry")
     add.add_argument("kind", metavar="KIND", help="GRANT, FORBID, STOP, ACCEPT, SCOPE or NOTE")
     add.add_argument("text", nargs="+", metavar="TEXT")
@@ -448,7 +448,7 @@ def build_parser():
 
     checkpoint = commands.add_parser("checkpoint", help="checkpoint of the current task")
     checkpoint.set_defaults(handler=cmd_checkpoint)
-    actions = _actions(checkpoint, "checkpoint")
+    actions = _actions(checkpoint)
     write = actions.add_parser("write", help="replace the checkpoint (reads stdin when no TEXT)")
     write.add_argument("text", nargs="*", metavar="TEXT")
     actions.add_parser("show", help="print the checkpoint")
@@ -459,7 +459,7 @@ def build_parser():
 
     scope = commands.add_parser("scope", help="declared roots of the scope fence")
     scope.set_defaults(handler=cmd_scope)
-    actions = _actions(scope, "scope")
+    actions = _actions(scope)
     scope_set = actions.add_parser("set", help="replace the declared roots")
     scope_set.add_argument("roots", nargs="+", metavar="ROOT")
     scope_set.add_argument("--allow", action="append", default=[], metavar="REGEX",
@@ -475,7 +475,7 @@ def build_parser():
 
     approvals = commands.add_parser("approvals", help="stored approvals")
     approvals.set_defaults(handler=cmd_approvals)
-    actions = _actions(approvals, "approvals")
+    actions = _actions(approvals)
     actions.add_parser("show", help="list the approvals")
     actions.add_parser("clear", help="remove every approval")
 
@@ -499,7 +499,7 @@ def build_parser():
 
     provenance = commands.add_parser("provenance", help="which source supports which section")
     provenance.set_defaults(handler=cmd_provenance)
-    actions = _actions(provenance, "provenance")
+    actions = _actions(provenance)
     add = actions.add_parser("add", help="add a row")
     add.add_argument("section")
     add.add_argument("source")
@@ -513,7 +513,7 @@ def build_parser():
 
     rules = commands.add_parser("rules", help="lint, rewrite and compile rules files")
     rules.set_defaults(handler=cmd_rules)
-    actions = _actions(rules, "rules")
+    actions = _actions(rules)
     actions.add_parser("lint", help="lint the rules files under ROOT; exit 1 when there are findings"
                        ).add_argument("root", nargs="?", default=".", metavar="ROOT")
     actions.add_parser("rewrite", help="print a fill-in template for each negative rule"
@@ -530,7 +530,7 @@ def build_parser():
 
     regress = commands.add_parser("regress", help="personal regression set")
     regress.set_defaults(handler=cmd_regress)
-    actions = _actions(regress, "regress")
+    actions = _actions(regress)
     actions.add_parser("init", help="create set.json").add_argument(
         "--force", action="store_true", help="back up the existing set.json and write the default set")
     actions.add_parser("show", help="print the set")
@@ -560,6 +560,9 @@ def main(argv=None):
         return args.handler(args)
     except (OSError, ValueError) as error:
         sys.stderr.write("error: %s\n" % error)
+        return EXIT_USAGE
+    except ImportError as error:
+        sys.stderr.write("error: a library module could not be loaded (%s)\n" % error)
         return EXIT_USAGE
 
 

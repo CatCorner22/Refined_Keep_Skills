@@ -804,7 +804,7 @@ def _shell_command_string(args):
     return "", False
 
 
-def _find_exec_commands(args):
+def find_exec_commands(args):
     """Return the argument lists that `find` would run through -exec, -execdir, -ok and -okdir."""
     commands = []
     index = 0
@@ -821,7 +821,7 @@ def _find_exec_commands(args):
     return commands
 
 
-def _xargs_command(args):
+def xargs_command(args):
     """Return the command `xargs` runs: everything after its own leading options."""
     index = 0
     while index < len(args):
@@ -857,10 +857,10 @@ def _carried_segments(segment, depth, variables):
     if name == "trap" and args:
         return _parse_text(args[0], cwd, depth + 1, variables)
     if name == "xargs":
-        return _argv_segments(_xargs_command(args), segment, depth, variables)
+        return _argv_segments(xargs_command(args), segment, depth, variables)
     if name == "find":
         carried = []
-        for command in _find_exec_commands(args):
+        for command in find_exec_commands(args):
             carried.extend(_argv_segments(command, segment, depth, variables))
         return carried
     wrapped_in_one_word = len(stripped) == 1 and " " in stripped[0] and stripped[0] != segment.argv[0]

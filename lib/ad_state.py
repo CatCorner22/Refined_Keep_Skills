@@ -361,6 +361,9 @@ def manifest_lookup(target):
     ``path``, ``url``, ``basename``. With no match it returns
     ``(None, None, candidates)``, where ``candidates`` lists the keys that
     share the file name when the name is ambiguous.
+
+    A path that exists on disk and is not in the manifest is a different file
+    from any recorded one, so it never matches by file name.
     """
     if not isinstance(target, str) or not target.strip():
         return None, None, []
@@ -370,6 +373,8 @@ def manifest_lookup(target):
         key = os.path.realpath(os.path.expanduser(target))
         if key in manifest:
             return key, manifest[key], "path"
+        if os.path.exists(key):
+            return None, None, []
     for key, entry in manifest.items():
         if entry.get("url") and entry.get("url") == target:
             return key, entry, "url"
