@@ -1353,7 +1353,7 @@ def _fetch_output_path(fetch, cwd):
     resolved = resolve_target(output, fetch.get("cwd_hint"), cwd)
     if resolved is None:
         return None
-    lands_in_directory = output.endswith("/") or os.path.isdir(resolved)
+    lands_in_directory = output.endswith("/") or output in (".", "..") or os.path.isdir(resolved)
     if lands_in_directory and fetch.get("urls"):
         name = ad_shell.url_basename(fetch["urls"][0])
         if name:
@@ -1371,16 +1371,12 @@ def _manifest_match(fetch, cwd):
         if entry is not None:
             return key, entry, "the same URL"
     output_path = _fetch_output_path(fetch, cwd)
-    if output_path:
-        key, entry, how = ad_state.manifest_lookup(output_path)
+    candidates = ([output_path] if output_path else []) + list(fetch.get("urls", []))
+    for candidate in candidates:
+        key, entry, how = ad_state.manifest_lookup(candidate)
         if entry is not None and how == "path":
             return key, entry, "the same output path"
-    name = os.path.basename(output_path) if output_path else ""
-    if not name and fetch.get("urls"):
-        name = ad_shell.url_basename(fetch["urls"][0])
-    if name:
-        key, entry, how = ad_state.manifest_lookup(name)
-        if entry is not None and how in ("basename", "path"):
+        if entry is not None and how == "basename":
             return key, entry, "the same file name"
     return None
 
