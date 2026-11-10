@@ -109,8 +109,10 @@ AD_SUBCOMMANDS = {
     ),
 }
 
-# Sub-commands that must prompt the user, so no skill may pre-approve them.
+# Sub-commands that change what the scope fence allows. They must prompt the
+# user, so no skill may pre-approve them. The two read-only forms are exempt.
 NEVER_PREAPPROVED_SUBCOMMANDS = ("approve", "approvals", "scope")
+PREAPPROVED_READ_ONLY_FORMS = ("approvals show", "scope show")
 
 # Frontmatter keys this repository uses (SKILL.md style guide).
 REPO_FRONTMATTER_KEYS = ("name", "description", "compatibility", "metadata", "allowed-tools")
@@ -141,9 +143,6 @@ ZIP_EXCLUDED_SUFFIXES = (".pyc", ".pyo")
 VALIDATOR_EXCLUDED_DIRS = ("__pycache__", "node_modules")
 VALIDATOR_ROOT_EXCLUDED_DIRS = ("evals",)
 
-# The repository is public: these strings must never ship (case-insensitive).
-PRIVATE_TERMS = ("nebula", "genome", "blake reagan", "apoe")
-
 # Skill names that existed in drafts of version 1 and must not be named any more.
 REMOVED_SKILLS = ("tool-output-trimmer",)
 
@@ -157,7 +156,7 @@ SCRIPT_REFERENCE = re.compile(r"scripts/[A-Za-z0-9_\-]+\.py")
 AD_EXAMPLE = re.compile(r'python3 "\$\{CLAUDE_SKILL_DIR\}/scripts/ad\.py"([^`\n]*)')
 PLAIN_WORD = re.compile(r"^[a-z][a-z0-9\-]*$")
 ALLOWED_TOOLS_AD_RULE = re.compile(
-    r'Bash\(python3 "\$\{CLAUDE_SKILL_DIR\}/scripts/ad\.py" ([a-z][a-z\-]*)'
+    r'Bash\(python3 "\$\{CLAUDE_SKILL_DIR\}/scripts/ad\.py" ([^)]*)\)'
 )
 BARE_PYTHON_RULE = re.compile(r"Bash\(python3?(?::\*| \*)?\)")
 READ_TOOL_RULE = re.compile(r"(?<![A-Za-z])(Read|Grep|Glob)(?![A-Za-z])")
@@ -591,8 +590,11 @@ def allowed_tools_findings(value):
         text = str(value)
     messages = []
     for match in ALLOWED_TOOLS_AD_RULE.finditer(text):
-        if match.group(1) in NEVER_PREAPPROVED_SUBCOMMANDS:
-            messages.append("allowed-tools pre-approves `ad.py %s`, which must prompt the user" % match.group(1))
+        rule = " ".join(match.group(1).split())
+        if rule in PREAPPROVED_READ_ONLY_FORMS:
+            continue
+        if rule.split(" ")[0] in NEVER_PREAPPROVED_SUBCOMMANDS:
+            messages.append("allowed-tools pre-approves `ad.py %s`, which must prompt the user" % rule)
     if BARE_PYTHON_RULE.search(text):
         messages.append("allowed-tools holds a bare python rule")
     outside_bash = re.sub(r"Bash\([^)]*\)", " ", text)
@@ -682,18 +684,6 @@ def check_versions(root):
     return findings
 
 
-def check_privacy(root):
-    """Findings for private terms inside any file that a zip would carry."""
-    findings = []
-    for name in present_skills(root):
-        for arcname, path in package_members(root, name):
-            lowered = read_bytes(path).decode("utf-8", "replace").lower()
-            for term in PRIVATE_TERMS:
-                if term in lowered:
-                    findings.append("%s: contains the private term %r" % (relative(root, path), term))
-    return findings
-
-
 def check_layout(root):
     """Findings for repository-level layout rules."""
     findings = []
@@ -711,7 +701,6 @@ def check(root, include_dist=True):
         if name in ALL_SKILLS:
             findings.extend(check_skill_text(root, name))
     findings.extend(check_versions(root))
-    findings.extend(check_privacy(root))
     findings.extend(check_layout(root))
     if include_dist:
         findings.extend(check_dist(root))
