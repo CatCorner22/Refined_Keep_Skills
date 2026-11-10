@@ -1,0 +1,14 @@
+{
+  "name": "refined-keep-skills",
+  "description": "The agent-discipline plugin: 17 skills plus optional enforcement hooks.",
+  "owner": {
+    "name": "CatCorner22"
+  },
+  "plugins": [
+    {
+      "name": "agent-discipline",
+      "source": "./",
+      "description": "17 agent-discipline skills with optional enforcement hooks for Claude Code."
+    }
+  ]
+}
