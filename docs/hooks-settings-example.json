@@ -1,0 +1,165 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "session-start"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "pre-bash"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "pre-write"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "pre-fetch"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "read-cache"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "record-read"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "log"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "log-failure"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "completion-gate"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
