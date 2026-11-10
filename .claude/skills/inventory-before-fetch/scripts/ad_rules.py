@@ -160,7 +160,7 @@ def find_rule_files(root="."):
         subdirectories[:] = sorted(name for name in subdirectories if name not in SKIPPED_DIRS)
         if len(parts) >= MAX_WALK_DEPTH:
             subdirectories[:] = []
-        for name in sorted(names):
+        for name in sorted(names, key=lambda item: (os.path.islink(os.path.join(directory, item)), item)):
             if not _is_rule_file(parts, name):
                 continue
             path = os.path.join(directory, name)
@@ -231,12 +231,27 @@ def _looks_like_command(span):
     return not any(char in span for char in "<>{}$")
 
 
+def _first_alternative(text, start):
+    """Return the index of the first word after `start` that introduces an alternative (`instead`, `use`), or -1."""
+    match = _ALTERNATIVE_RE.search(_CODE_SPAN_RE.sub(lambda span: " " * len(span.group(0)), text), start)
+    return match.start() if match else -1
+
+
 def _blocked_spans(text):
-    """Return the code spans that follow the first negation in a rule: the commands the rule prohibits."""
+    """Return the code spans the rule prohibits: those after the first negation, within its clause.
+
+    The clause ends at a semicolon or at a word that introduces the alternative, so in
+    "Do not hand-edit `dist/`; run `npm run build` instead" the build command is not blocked.
+    """
     negation = _NEGATION_RE.search(text)
     if not negation:
         return []
-    return [match.group(1).strip() for match in _CODE_SPAN_RE.finditer(text) if match.start() > negation.start()]
+    end = len(text)
+    for boundary in (text.find(";", negation.end()), _first_alternative(text, negation.end())):
+        if 0 <= boundary < end:
+            end = boundary
+    return [match.group(1).strip() for match in _CODE_SPAN_RE.finditer(text)
+            if negation.start() < match.start() < end]
 
 
 def blockable_rules(text):

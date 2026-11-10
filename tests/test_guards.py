@@ -1062,6 +1062,12 @@ class RetryRuleTests(GuardCase):
     def decide(self, command, session="S1"):
         return ad_guards.validate_call_decide(self.bash(command, cwd=self.tmp, session_id=session))
 
+    def test_the_tools_own_check_commands_are_never_counted_as_failed_retries(self):
+        command = 'python3 "/x/skills/autonomy-ledger/scripts/ad.py" ledger check "deploy"'
+        self.log(command, ok=False)
+        self.log(command, ok=False)
+        self.assertEqual(self.decide(command), (None, None))
+
     def test_two_failures_in_a_row_deny_the_third_identical_call(self):
         self.log("npm test", ok=False)
         self.assertEqual(self.decide("npm test"), (None, None))

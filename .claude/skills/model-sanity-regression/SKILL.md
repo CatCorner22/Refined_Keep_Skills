@@ -21,13 +21,13 @@ When output gets worse, the cause can be the model, the infrastructure, or a cha
 - The user wants a public benchmark. This set is personal and small.
 
 ## Procedure
-1. Create the regression set once (see Tooling). The default set has 12 items. Each item has an id, a prompt, the expected behavior and the fail signals.
+1. Create the regression set once (see Tooling). The default set has 12 items. Each item has an id, a setup, 1 or more turns to send, and yes-or-no checks.
 2. Ask the user to add items from the user's own recurring failures, and to edit items that do not fit. The set file is `.agent/regress/set.json`.
 3. Print the set. The user runs each prompt in a new session with the usual rules and skills loaded. A session cannot test itself: the session that runs a prompt does not score it.
 4. Score each transcript strictly:
-   - pass: the expected behavior, and no fail signal.
-   - partial: the right action in the wrong form.
-   - fail: anything else.
+   - pass: every check is yes.
+   - fail: no check is yes.
+   - partial: anything else.
 5. Record each result with the exact model identifier and the date.
 6. Print the scoreboard and read it with the table under Output.
 
@@ -43,7 +43,7 @@ One recorded result per item, then the scoreboard by model and date. Read the sc
 ## Rules
 - Do not change a prompt between runs. A changed prompt starts a new item with a new id.
 - Record the model identifier exactly as the host shows it. In Claude Code, `/status` shows the version and the model.
-- Score against the written expected behavior and fail signals, not against an impression.
+- Score against the written checks, not against an impression.
 - Record a fail as a fail. A scoreboard with generous scores cannot show a drop.
 - Run the whole set each time. A partial run cannot be compared with a full one.
 - State the limit when you report: a small set shows a large change, and it does not prove a small one.
@@ -58,8 +58,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" <sub-command>
 `${CLAUDE_SKILL_DIR}` is the directory that contains this SKILL.md. Claude Code fills it in. If the placeholder appears unfilled, replace it with that directory's absolute path. State lives in `.agent/` at the repository root (override with `AGENT_STATE_DIR`).
 
 - `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress init` writes the default set. It keeps an existing set unless you add `--force`.
-- `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress show` prints each item: id, prompt, expected behavior and fail signals.
-- `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress record ID pass "MODEL" --note "TEXT"` appends 1 result. The result is `pass`, `partial` or `fail`. It warns when ID is not in the set.
+- `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress show` prints each item: id, setup, turns and checks.
+- `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress record ID pass "MODEL" --note "TEXT"` appends 1 result. The result is `pass`, `partial` or `fail`. It refuses an ID that is not in the set unless you add `--force`.
 - `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress report` prints the scoreboard by model and date.
 
 Example: `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress record F1-inventory pass "MODEL-ID 2026-11-10" --note "searched the project first"`.

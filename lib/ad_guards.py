@@ -1508,7 +1508,10 @@ def validate_call_decide(inp):
     command = _text(_tool_input(inp).get("command"))
     if not command.strip():
         return None, "The command is empty."
-    reason = _retry_denial(inp, command)
+    # The CLI's own check sub-commands exit non-zero to report a negative answer (for example
+    # `ledger check` with no match). Those exits are answers, not failures, so the retry rule skips them.
+    calls_own_cli = re.search(r"(^|[\s/\"'])ad\.py([\s\"']|$)", command) is not None
+    reason = None if calls_own_cli else _retry_denial(inp, command)
     if reason:
         return reason, None
     cwd = _text(inp.get("cwd"))

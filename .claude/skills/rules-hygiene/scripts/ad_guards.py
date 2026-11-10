@@ -1353,7 +1353,7 @@ def _fetch_output_path(fetch, cwd):
     resolved = resolve_target(output, fetch.get("cwd_hint"), cwd)
     if resolved is None:
         return None
-    lands_in_directory = output.endswith("/") or os.path.isdir(resolved)
+    lands_in_directory = output.endswith("/") or output in (".", "..") or os.path.isdir(resolved)
     if lands_in_directory and fetch.get("urls"):
         name = ad_shell.url_basename(fetch["urls"][0])
         if name:
@@ -1371,16 +1371,12 @@ def _manifest_match(fetch, cwd):
         if entry is not None:
             return key, entry, "the same URL"
     output_path = _fetch_output_path(fetch, cwd)
-    if output_path:
-        key, entry, how = ad_state.manifest_lookup(output_path)
+    candidates = ([output_path] if output_path else []) + list(fetch.get("urls", []))
+    for candidate in candidates:
+        key, entry, how = ad_state.manifest_lookup(candidate)
         if entry is not None and how == "path":
             return key, entry, "the same output path"
-    name = os.path.basename(output_path) if output_path else ""
-    if not name and fetch.get("urls"):
-        name = ad_shell.url_basename(fetch["urls"][0])
-    if name:
-        key, entry, how = ad_state.manifest_lookup(name)
-        if entry is not None and how in ("basename", "path"):
+        if entry is not None and how == "basename":
             return key, entry, "the same file name"
     return None
 
@@ -1512,7 +1508,10 @@ def validate_call_decide(inp):
     command = _text(_tool_input(inp).get("command"))
     if not command.strip():
         return None, "The command is empty."
-    reason = _retry_denial(inp, command)
+    # The CLI's own check sub-commands exit non-zero to report a negative answer (for example
+    # `ledger check` with no match). Those exits are answers, not failures, so the retry rule skips them.
+    calls_own_cli = re.search(r"(^|[\s/\"'])ad\.py([\s\"']|$)", command) is not None
+    reason = None if calls_own_cli else _retry_denial(inp, command)
     if reason:
         return reason, None
     cwd = _text(inp.get("cwd"))
