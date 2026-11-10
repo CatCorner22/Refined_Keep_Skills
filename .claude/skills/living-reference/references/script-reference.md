@@ -116,7 +116,7 @@ export_reference.py FILE.md [--to docx|html|pdf] [--out PATH] [--force] [--stric
 | `--force` | Replace an existing output file. The script never accepts the source file as the output. |
 | `--strict` | Export nothing and exit 1 while the health block has a finding. |
 | `--allow-raw-html` | Keep raw HTML and script links from the source. |
-| `--pdf-engine NAME` | PDF engine for pandoc. Default: the first of `pdflatex`, `xelatex`, `lualatex`, `tectonic`, `typst`, `weasyprint`, `wkhtmltopdf` found on PATH. |
+| `--pdf-engine NAME` | PDF engine for pandoc. Default: the first of `pdflatex`, `xelatex`, `lualatex`, `tectonic`, `typst`, `weasyprint`, `wkhtmltopdf` found on PATH. With no engine installed, the script uses LibreOffice, then a Chromium browser. |
 
 What the script does:
 
@@ -132,7 +132,7 @@ Exit status: 0 exported; 1 with `--strict` when a finding exists; 2 for every er
 Requirements:
 
 - pandoc on PATH. When pandoc is absent, the script uses the copy that the Python package `pypandoc_binary` bundles, if that package is installed.
-- For PDF: a pandoc PDF engine. Without one the script exits 2 and names the engines it looked for. Export DOCX or HTML in that case, and convert with another tool if the user needs a PDF.
+- For PDF: the script uses the first route that exists. Route 1: a pandoc PDF engine. Route 2: LibreOffice (`soffice` or `libreoffice`); pandoc makes a DOCX and LibreOffice converts it. Route 3: a Chromium browser (`chrome-headless-shell`, `chromium`, `google-chrome`, `microsoft-edge`); pandoc makes an HTML page and the browser prints it. With none of the 3, the script exits 2 and names what it looked for. `--pdf-engine NAME` forces route 1 with that engine.
 
 ## Permissions in Claude Code
 

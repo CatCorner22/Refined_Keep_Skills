@@ -17,8 +17,10 @@ Exit status:
        missing pandoc or PDF engine, or a pandoc failure
 
 Needs pandoc on PATH (or the pypandoc_binary package, which bundles pandoc).
-PDF output also needs a pandoc PDF engine such as pdflatex, xelatex, typst,
-weasyprint or wkhtmltopdf.
+PDF output uses the first route that exists on this machine: a pandoc PDF engine
+(pdflatex, xelatex, typst, weasyprint, wkhtmltopdf and others), then LibreOffice
+(pandoc makes a DOCX and LibreOffice converts it), then a Chromium browser
+(pandoc makes an HTML page and the browser prints it).
 """
 import argparse
 import datetime
@@ -72,7 +74,7 @@ def build_parser():
         description='Export a living reference to DOCX, HTML or PDF. The source file is '
                     'never changed.',
         epilog='Exit status: 0 exported; 1 with --strict when findings exist; 2 any error. '
-               'PDF needs a pandoc PDF engine (%s).' % ', '.join(PDF_ENGINES))
+               'PDF uses a pandoc PDF engine (%s), or LibreOffice, or a Chromium browser.' % ', '.join(PDF_ENGINES))
     parser.add_argument('file', metavar='FILE.md')
     parser.add_argument('--to', choices=FORMATS, default='docx', help='output format')
     parser.add_argument('--out', metavar='PATH',
@@ -84,7 +86,7 @@ def build_parser():
     parser.add_argument('--allow-raw-html', action='store_true',
                         help='keep raw HTML and script links from the source in the export')
     parser.add_argument('--pdf-engine', metavar='NAME',
-                        help='pandoc PDF engine to use (default: the first one found on PATH)')
+                        help='pandoc PDF engine to use (default: the first one found on PATH; with none, LibreOffice, then a Chromium browser)')
     parser.add_argument('--stale-days', type=refresh.parse_days, metavar='N',
                         help='cadence in days; overrides the Stale-after line in the file')
     parser.add_argument('--today', type=refresh.parse_date, metavar='YYYY-MM-DD',
@@ -130,9 +132,74 @@ def find_pdf_engine(requested, which=shutil.which):
     for engine in PDF_ENGINES:
         if which(engine):
             return engine
-    raise ExportError('PDF export needs a pandoc PDF engine and none of these is on PATH: %s. '
-                      'Install one, or export with --to docx or --to html'
-                      % ', '.join(PDF_ENGINES))
+    return None
+
+
+OFFICE_PROGRAMS = ('soffice', 'libreoffice')
+BROWSER_PROGRAMS = ('chrome-headless-shell', 'chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable',
+                    'chrome', 'microsoft-edge', 'msedge')
+CONVERTER_TIMEOUT_SECONDS = 180
+
+
+def find_program(names, which=shutil.which):
+    """Return the first program in names that is on PATH, or None."""
+    for name in names:
+        found = which(name)
+        if found:
+            return found
+    return None
+
+
+def run_converter(command, what):
+    """Run an office or browser converter and raise ExportError when it fails."""
+    try:
+        done = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=CONVERTER_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise ExportError('%s did not finish within %d seconds'
+                          % (what, CONVERTER_TIMEOUT_SECONDS))
+    except OSError as error:
+        raise ExportError('%s could not start: %s' % (what, error))
+    if done.returncode != 0:
+        detail = done.stderr.decode('utf-8', 'replace').strip()
+        raise ExportError('%s failed (status %d): %s' % (what, done.returncode, detail))
+
+
+def pdf_through_office(office, pandoc_step, work, temporary):
+    """Make a DOCX with pandoc, then let LibreOffice convert it to PDF."""
+    docx = os.path.join(work, 'export.docx')
+    pandoc_step('docx', docx)
+    profile = 'file://' + os.path.join(work, 'office-profile')
+    run_converter([office, '-env:UserInstallation=' + profile, '--headless',
+                   '--convert-to', 'pdf', '--outdir', work, docx], 'LibreOffice')
+    made = os.path.join(work, 'export.pdf')
+    if not os.path.isfile(made) or os.path.getsize(made) == 0:
+        raise ExportError('LibreOffice reported success but wrote no PDF')
+    shutil.copyfile(made, temporary)
+
+
+def pdf_through_browser(browser, pandoc_step, work, temporary):
+    """Make a standalone HTML page with pandoc, then let a Chromium browser print it to PDF."""
+    page = os.path.join(work, 'export.html')
+    pandoc_step('html', page)
+    made = os.path.join(work, 'export.pdf')
+    run_converter([browser, '--headless', '--disable-gpu', '--no-sandbox', '--no-first-run',
+                   '--disable-extensions', '--disable-background-networking',
+                   '--user-data-dir=' + os.path.join(work, 'browser-profile'),
+                   '--no-pdf-header-footer', '--print-to-pdf=' + made,
+                   'file://' + page], 'The browser')
+    if not os.path.isfile(made) or os.path.getsize(made) == 0:
+        raise ExportError('the browser reported success but wrote no PDF')
+    shutil.copyfile(made, temporary)
+
+
+def no_pdf_route_error():
+    """Explain every route to a PDF, because none exists on this machine."""
+    return ExportError(
+        'PDF export found no way to make a PDF. It looks, in this order, for a pandoc PDF '
+        'engine (%s), then LibreOffice (%s), then a Chromium browser (%s). Install one of '
+        'them, or export with --to docx or --to html'
+        % (', '.join(PDF_ENGINES), ', '.join(OFFICE_PROGRAMS), ', '.join(BROWSER_PROGRAMS)))
 
 
 def strip_tags(line, comments):
@@ -193,24 +260,44 @@ def run_pandoc(pandoc, markdown, title, options, out):
     os.close(descriptor)
     work = tempfile.mkdtemp(prefix='living-reference-')
     try:
-        command = [pandoc, '-f', 'gfm', '--wrap=none', '-o', temporary,
-                   '--metadata', 'pagetitle=' + title]
-        if options.to == 'pdf':
-            command.append('--pdf-engine=' + find_pdf_engine(options.pdf_engine))
-        else:
-            command.extend(['-t', options.to])
-        if options.to == 'html':
-            command.append('--standalone')
+        filter_path = None
         if not options.allow_raw_html:
             filter_path = os.path.join(work, 'safe-html.lua')
             with open(filter_path, 'w', encoding='utf-8') as handle:
                 handle.write(SAFE_HTML_FILTER)
-            command.extend(['--lua-filter', filter_path])
-        done = subprocess.run(command, input=markdown.encode('utf-8'),
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if done.returncode != 0:
-            detail = done.stderr.decode('utf-8', 'replace').strip()
-            raise ExportError('pandoc failed (status %d): %s' % (done.returncode, detail))
+
+        def pandoc_step(target, destination, engine=None):
+            """Run pandoc once. target is docx or html; engine makes a PDF directly."""
+            command = [pandoc, '-f', 'gfm', '--wrap=none', '-o', destination,
+                       '--metadata', 'pagetitle=' + title]
+            if engine:
+                command.append('--pdf-engine=' + engine)
+            else:
+                command.extend(['-t', target])
+            if target == 'html':
+                command.append('--standalone')
+            if filter_path:
+                command.extend(['--lua-filter', filter_path])
+            done = subprocess.run(command, input=markdown.encode('utf-8'),
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if done.returncode != 0:
+                detail = done.stderr.decode('utf-8', 'replace').strip()
+                raise ExportError('pandoc failed (status %d): %s' % (done.returncode, detail))
+
+        if options.to != 'pdf':
+            pandoc_step(options.to, temporary)
+        else:
+            engine = find_pdf_engine(options.pdf_engine)
+            office = find_program(OFFICE_PROGRAMS)
+            browser = find_program(BROWSER_PROGRAMS)
+            if engine:
+                pandoc_step('pdf', temporary, engine=engine)
+            elif office:
+                pdf_through_office(office, pandoc_step, work, temporary)
+            elif browser:
+                pdf_through_browser(browser, pandoc_step, work, temporary)
+            else:
+                raise no_pdf_route_error()
         mask = os.umask(0)
         os.umask(mask)
         os.chmod(temporary, DEFAULT_FILE_MODE & ~mask)

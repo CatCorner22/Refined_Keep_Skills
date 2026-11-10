@@ -1069,13 +1069,77 @@ class Export(Base):
         before = self.read_bytes(path)
         status, out, err = self.export(path, '--to', 'pdf', env=dict(os.environ, PATH=bin_dir))
         self.assertEqual(status, 2)
-        self.assertIn('PDF export needs a pandoc PDF engine', err)
+        self.assertIn('PDF export found no way to make a PDF', err)
+        self.assertIn('LibreOffice', err)
         self.assertEqual(os.listdir(work), ['ref.md'])
         self.assertEqual(self.read_bytes(path), before)
         status, out, err = self.export(path, '--to', 'pdf', '--pdf-engine', 'no-such-engine',
                                        env=dict(os.environ, PATH=bin_dir))
         self.assertEqual(status, 2)
         self.assertIn('"no-such-engine" is not on PATH', err)
+
+    def pdf_with_only(self, program_names):
+        """Export to PDF with a PATH that holds pandoc plus the first named program found."""
+        found = None
+        for name in program_names:
+            found = shutil.which(name)
+            if found:
+                break
+        if not found:
+            self.skipTest('none of %s is installed' % ', '.join(program_names))
+        bin_dir = os.path.join(self.tmp, 'bin-pdf')
+        os.mkdir(bin_dir)
+        os.symlink(PANDOC, os.path.join(bin_dir, 'pandoc'))
+        os.symlink(os.path.realpath(found), os.path.join(bin_dir, os.path.basename(found)))
+        path = self.write(make_doc())
+        before = self.read_bytes(path)
+        env = dict(os.environ, PATH=bin_dir + os.pathsep + '/usr/bin' + os.pathsep + '/bin')
+        for other in ('pdflatex', 'xelatex', 'lualatex', 'tectonic', 'typst', 'weasyprint',
+                      'wkhtmltopdf'):
+            if shutil.which(other):
+                self.skipTest('a pandoc PDF engine is installed, so the fallback is not reached')
+        status, out, err = self.export(path, '--to', 'pdf', env=env)
+        self.assertEqual(status, 0, err)
+        pdf = self.read_bytes(os.path.join(self.tmp, 'ref.pdf'))
+        self.assertEqual(pdf[:5], b'%PDF-')
+        self.assertGreater(len(pdf), 1000)
+        self.assertEqual(self.read_bytes(path), before)
+
+    def test_pdf_falls_back_to_libreoffice(self):
+        self.pdf_with_only(('soffice', 'libreoffice'))
+
+    def test_pdf_falls_back_to_a_chromium_browser(self):
+        self.pdf_with_only_browser()
+
+    def pdf_with_only_browser(self):
+        """Call the browser route directly, because LibreOffice on PATH would win otherwise."""
+        scripts = os.path.dirname(EXPORT)
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        sys.dont_write_bytecode = True
+        import export_reference
+        self.assertIsNone(export_reference.find_program(('no-such-program-anywhere',)))
+        import glob
+        shells = sorted(glob.glob('/opt/pw-browsers/chromium_headless_shell-*/*/chrome-headless-shell'))
+        browser = shells[-1] if shells else export_reference.find_program(
+            export_reference.BROWSER_PROGRAMS)
+        if not browser:
+            self.skipTest('no Chromium browser is installed')
+        work = os.path.join(self.tmp, 'browser-work')
+        os.mkdir(work)
+        target = os.path.join(self.tmp, 'browser.pdf')
+
+        def pandoc_step(kind, destination, engine=None):
+            with open(destination, 'w', encoding='utf-8') as handle:
+                handle.write('<html><body><h1>Title</h1><p>Body text.</p></body></html>')
+
+        try:
+            export_reference.pdf_through_browser(browser, pandoc_step, work, target)
+        except export_reference.ExportError as error:
+            if 'did not finish' in str(error):
+                self.skipTest('the installed browser hangs in this environment: %s' % error)
+            raise
+        self.assertEqual(self.read_bytes(target)[:5], b'%PDF-')
 
 
 class ExportWithoutPandoc(Base):

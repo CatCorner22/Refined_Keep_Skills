@@ -80,3 +80,8 @@ Version 2 is a rewrite after a review of version 1. A GRANT entry in the ledger 
 ## [1.0.0]
 
 The original bundle: 17 skills in 2 copies (plugin and standalone), 9 hook entries, 7 library files copied into 12 skill folders by hand, and 17 zips with no build script.
+
+## 2.0.1
+
+- living-reference: PDF export now works without a pandoc PDF engine. The export script uses the first route that exists: a pandoc PDF engine, then LibreOffice, then a Chromium browser. Tests cover both fallback routes.
+- The retry rule no longer counts the CLI's own negative answers (for example `ledger check` with no match) as failed retries.
