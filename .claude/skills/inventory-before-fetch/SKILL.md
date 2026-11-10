@@ -20,7 +20,7 @@ A file that the user can see in a project or folder is not necessarily in your c
 - You are making a claim about a document's content: use retrieval-verification-gate, if installed.
 
 ## Procedure
-Run the 4 steps in order. Stop at the first hit.
+Steps 1 to 4 are the inventory. Run them in order and stop at the first hit. Then continue at step 5.
 
 1. State directory. Run `python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" manifest check NAME`. If the status is `UNCHANGED`, use the summary or read a range.
 2. Host stores. Search with the file name and 2 synonyms, for example `survey_2026.parquet`, "survey data" and "2026 survey". Use the host's search for project knowledge, attached files or connected sources.
