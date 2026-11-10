@@ -468,8 +468,11 @@ EVIDENCE_DISPLAY = {
     "diff": "Diff",
     "not_verified": "Not verified",
 }
+# What may stand before a label: bullets, quote marks, emphasis, a list number.
+LABEL_PREFIX = r"[^\w\n]*(?:\d+[.)][^\w\n]*)?"
 ANY_LABEL_RE = re.compile(
-    r"(?i)^[^\w\n]*(?:%s|status)[^\w\n:\uff1a]*[:\uff1a]" % "|".join(pattern for _, pattern in EVIDENCE_LABELS))
+    r"(?i)^%s(?:%s|status)[^\w\n:\uff1a]*[:\uff1a]"
+    % (LABEL_PREFIX, "|".join(pattern for _, pattern in EVIDENCE_LABELS)))
 EVIDENCE_CONTINUATION_LINES = 12
 EVIDENCE_VALUE_CHARS = 2000
 PLACEHOLDER_RE = re.compile(r"^(?:<[^>]*>|\[[^\]]*\]|\.{3}|\u2026|todo|tbd|\?+)$", re.I)
@@ -574,7 +577,7 @@ def find_evidence_block(message):
         for key, pattern in EVIDENCE_LABELS:
             if key in found:
                 continue
-            match = re.match(r"(?i)^[^\w\n]*(?:%s)[^\w\n:\uff1a]*[:\uff1a](.*)$" % pattern, line)
+            match = re.match(r"(?i)^%s(?:%s)[^\w\n:\uff1a]*[:\uff1a](.*)$" % (LABEL_PREFIX, pattern), line)
             if not match:
                 continue
             value = _clean_value(match.group(1))

@@ -64,6 +64,7 @@ _GLOB_CHARS = "*?["
 _DB_CLIENTS = ("psql", "mysql", "mariadb", "sqlite3", "sqlcmd", "mongosh", "mongo", "redis-cli",
                "clickhouse-client", "duckdb", "bq", "snowsql", "cockroach", "pg_restore")
 _DB_DROP_PROGRAMS = ("dropdb", "dropuser")
+_PRODUCTION_IGNORED_SUFFIXES = (".sql", ".md", ".txt")
 _MIGRATION_RUNNERS = ("prisma", "drizzle-kit", "supabase", "alembic", "knex", "sequelize",
                       "sequelize-cli", "flyway", "liquibase")
 _RUNNER_DESTRUCTIVE_RES = tuple(re.compile(pattern) for pattern in (
@@ -90,7 +91,7 @@ _INLINE_DELETE_RE = re.compile(
     r"rmtree|os\.remove|os\.unlink|unlink\(|rmSync|rmdirSync|\brm\s+-[a-zA-Z]*[rR]"
     r"|File\.delete|FileUtils\.rm|git\s+push\s[^'\"]*(?:--force\b|\s-f\b)")
 
-_SQL_COMMENT_RE = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+_SQL_COMMENT_RE = re.compile(r"(?:^|(?<=\s))--\s[^\n]*|/\*.*?\*/", re.S)
 _SQL_DROP_RE = re.compile(r"\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|OWNED|COLUMN|ROLE|USER)\b", re.I)
 _SQL_TRUNCATE_RE = re.compile(r"\bTRUNCATE\b", re.I)
 _SQL_DELETE_RE = re.compile(r"\bDELETE\s+FROM\s+\S+", re.I)
@@ -412,6 +413,8 @@ def _classify_git_push(rest):
     """Force push and push to a protected branch."""
     options, operands = ad_shell.scan_options(rest, "o", ("--push-option", "--repo", "--receive-pack", "--exec"))
     names = [name for name, _ in options]
+    if "--dry-run" in names or "-n" in names:
+        return []
     refspecs = operands[1:]
     labels = []
     for flag in ("--force", "-f", "--mirror", "--delete", "-d", "--prune"):
@@ -465,6 +468,8 @@ def _classify_git_discard(subcommand, rest):
             return "git switch that discards changes"
     if subcommand == "stash" and rest[:1] in (["drop"], ["clear"]):
         return "git stash %s" % rest[0]
+    if subcommand == "worktree" and rest[:1] == ["remove"] and ("f" in short or "--force" in long_names):
+        return "git worktree remove --force"
     return ""
 
 
@@ -533,6 +538,8 @@ def _classify_database(name, args, segment):
         return [(LABEL_SQL, "pg_restore --clean drops objects before restoring")]
     if name == "bq" and "rm" in _operands(args)[:1]:
         return [(LABEL_SQL, "bq rm")]
+    if name == "mysqladmin" and "drop" in _operands(args):
+        return [(LABEL_SQL, "mysqladmin drop")]
     if name in _DB_CLIENTS:
         found = _destructive_sql(" ".join(args) + "\n" + segment.heredoc)
         if found:
@@ -563,7 +570,7 @@ def _production_marker(words):
             return "%s live" % word
         if word in ("--env=live", "--environment=live"):
             return word
-        if " " in word or "\n" in word:
+        if " " in word or "\n" in word or word.lower().endswith(_PRODUCTION_IGNORED_SUFFIXES):
             continue
         if _PROD_WORD_RE.search(word):
             return word
@@ -592,8 +599,8 @@ def _classify_infrastructure(name, args):
             found = " ".join(first_two)
     elif name in ("kubectl", "oc"):
         _, kube_operands = ad_shell.scan_options(args, _KUBECTL_SHORT_VALUES, _KUBECTL_LONG_VALUES)
-        if kube_operands[:1] == ["delete"]:
-            found = "delete"
+        if kube_operands[:1] in (["delete"], ["drain"]):
+            found = kube_operands[0]
     elif name == "helm":
         _, helm_operands = ad_shell.scan_options(args, "n", _HELM_LONG_VALUES)
         if helm_operands[:1] in (["uninstall"], ["delete"], ["del"], ["un"]):
@@ -615,7 +622,9 @@ def _classify_infrastructure(name, args):
             found = gsutil_operands[0]
     elif name in ("docker", "podman", "nerdctl"):
         removes_volumes = "v" in _short_flags(args) or "--volumes" in _long_flags(args)
-        if first_two in (["system", "prune"], ["volume", "rm"], ["volume", "prune"], ["volume", "remove"]):
+        prunes_images = first_two == ["image", "prune"] and ("a" in _short_flags(args) or "--all" in _long_flags(args))
+        if prunes_images or first_two in (["system", "prune"], ["volume", "rm"], ["volume", "prune"],
+                                          ["volume", "remove"]):
             found = " ".join(first_two)
         elif first_two == ["compose", "down"] and removes_volumes:
             found = "compose down --volumes"
@@ -626,8 +635,14 @@ def _classify_infrastructure(name, args):
         if first_two == ["repo", "delete"]:
             found = "repo delete"
     elif name == "pulumi":
-        if first == ["destroy"]:
+        if first == ["destroy"] or first_two == ["stack", "rm"]:
+            found = " ".join(first_two[:1] if first == ["destroy"] else first_two)
+    elif name in ("fly", "flyctl"):
+        if first == ["destroy"] or first_two == ["apps", "destroy"]:
             found = "destroy"
+    elif name == "vercel":
+        if first in (["remove"], ["rm"]):
+            found = first[0]
     elif name == "heroku":
         if first in (["apps:destroy"], ["pg:reset"]):
             found = first[0]

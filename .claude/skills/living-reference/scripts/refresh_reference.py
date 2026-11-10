@@ -1062,12 +1062,16 @@ def build_parser():
 
 
 def process_file(path, options, today):
-    """Refresh or check one file and return its exit status."""
+    """Refresh or check one file. Return its exit status and the lines to print.
+
+    The file is written before anything is printed, so a closed output pipe
+    (for example `| head`) cannot stop a refresh halfway.
+    """
     try:
         source = read_source(path)
     except (OSError, UnicodeDecodeError) as error:
         print('%s: cannot read the file: %s' % (path, error), file=sys.stderr)
-        return EXIT_ERROR
+        return EXIT_ERROR, []
     try:
         result = refresh_lines(source.lines, source.eols, source.eol, today,
                                options.stale_days, options.allow_missing_blocks)
@@ -1075,15 +1079,17 @@ def process_file(path, options, today):
         print('%s: structure error; nothing was written' % path, file=sys.stderr)
         for message in error.messages:
             print('  - %s' % message, file=sys.stderr)
-        return EXIT_ERROR
-    print('%s: %s; cadence %d days (%s)'
-          % (path, result.summary, result.stale_days, result.stale_origin))
-    report_findings(result)
+        return EXIT_ERROR, []
+    report = ['%s: %s; cadence %d days (%s)'
+              % (path, result.summary, result.stale_days, result.stale_origin)]
+    report.extend(finding_lines(result))
     if options.check:
-        return report_check(result, options.warnings_ok)
+        status, verdict = check_verdict(result, options.warnings_ok)
+        report.append(verdict)
+        return status, report
     if not result.changed:
-        print('  blocks: up to date; file not changed')
-        return EXIT_OK
+        report.append('  blocks: up to date; file not changed')
+        return EXIT_OK, report
     data = join_lines(result.lines, result.eols).encode('utf-8')
     if source.bom:
         data = UTF8_BOM + data
@@ -1091,27 +1097,27 @@ def process_file(path, options, today):
         write_atomic(path, data)
     except OSError as error:
         print('%s: cannot write the file: %s' % (path, error), file=sys.stderr)
-        return EXIT_ERROR
-    print('  blocks updated: %s' % ', '.join(result.changed))
-    return EXIT_OK
+        return EXIT_ERROR, []
+    report.append('  blocks updated: %s' % ', '.join(result.changed))
+    return EXIT_OK, report
 
 
-def report_findings(result):
-    """Print every finding, errors first."""
+def finding_lines(result):
+    """List every finding, errors first."""
+    lines = []
     if result.errors:
-        print('  errors: %d' % len(result.errors))
-        for finding in result.errors:
-            print('    - %s' % finding)
+        lines.append('  errors: %d' % len(result.errors))
+        lines.extend('    - %s' % finding for finding in result.errors)
     if result.warnings:
-        print('  warnings: %d' % len(result.warnings))
-        for finding in result.warnings:
-            print('    - %s' % finding)
+        lines.append('  warnings: %d' % len(result.warnings))
+        lines.extend('    - %s' % finding for finding in result.warnings)
     if not result.errors and not result.warnings:
-        print('  findings: none')
+        lines.append('  findings: none')
+    return lines
 
 
-def report_check(result, warnings_ok):
-    """Print the --check verdict and return 0 or 1."""
+def check_verdict(result, warnings_ok):
+    """Return the --check status (0 or 1) and the line that explains it."""
     reasons = []
     if result.changed:
         reasons.append('out-of-date blocks: %s' % ', '.join(result.changed))
@@ -1120,10 +1126,20 @@ def report_check(result, warnings_ok):
     if result.warnings and not warnings_ok:
         reasons.append(plural(len(result.warnings), 'warning'))
     if reasons:
-        print('  check: failed (%s); file not changed' % '; '.join(reasons))
-        return EXIT_FINDINGS
-    print('  check: passed; file not changed')
-    return EXIT_OK
+        return EXIT_FINDINGS, '  check: failed (%s); file not changed' % '; '.join(reasons)
+    return EXIT_OK, '  check: passed; file not changed'
+
+
+def print_report(lines):
+    """Print the report. Return False when the reader closed the pipe."""
+    try:
+        for line in lines:
+            print(line)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        sys.stdout = open(os.devnull, 'w')
+        return False
+    return True
 
 
 def use_utf8_output():
@@ -1139,8 +1155,12 @@ def main(argv=None):
     options = build_parser().parse_args(argv)
     today = options.today or datetime.date.today()
     status = EXIT_OK
+    printing = True
     for path in options.files:
-        status = max(status, process_file(path, options, today))
+        file_status, report = process_file(path, options, today)
+        status = max(status, file_status)
+        if printing:
+            printing = print_report(report)
     return status
 
 

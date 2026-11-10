@@ -22,7 +22,7 @@ Version 2 is a rewrite after a review of version 1. A GRANT entry in the ledger 
 - 1 state directory for each repository. The CLI walks upward to the repository root. Version 1 created `.agent/` in every working directory.
 - The state directory ignores itself in git (`.gitignore` with `*`), has mode 0700, and refuses state files that are symbolic links.
 - Writes are atomic and locked.
-- `ledger add` accepts only the 6 exact upper-case kinds and stores each entry on 1 line, so text with a line break cannot forge a second entry.
+- `ledger add` rejects an unknown kind and stores each entry on 1 line, so text with a line break cannot forge a second entry.
 - Read manifest entries carry merged line ranges, a fingerprint, the session and the agent. Change detection compares size and modification time first and hashes only when they differ.
 - The tool log redacts obvious secrets and rotates at 1 MB.
 - Read-only sub-commands do not create the state directory.

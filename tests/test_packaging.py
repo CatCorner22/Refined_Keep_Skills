@@ -709,11 +709,21 @@ def hook_entries(config):
 
 
 def argparse_choices(help_text):
-    """Return the names inside the first `{a,b,c}` group of an argparse help text."""
+    """Return the sub-command names that an argparse help text lists, or None.
+
+    Two layouts are read: a `{a,b,c}` group, and the indented list that
+    argparse prints under "positional arguments" when a metavar hides the group.
+    """
+    name = re.compile(r"^[a-z][a-z0-9\-]*$")
     match = re.search(r"\{([^{}]+)\}", " ".join(help_text.split()))
-    if not match:
-        return None
-    return sorted(name.strip() for name in match.group(1).split(",") if name.strip())
+    if match:
+        names = [item.strip() for item in match.group(1).split(",") if item.strip()]
+        if names and all(name.match(item) for item in names):
+            return sorted(names)
+    names = re.findall(r"^ {4}([a-z][a-z0-9\-]*)(?: {2,}|$)", help_text, re.MULTILINE)
+    if names:
+        return sorted(names)
+    return None
 
 
 class RealManifestTests(unittest.TestCase):
@@ -879,13 +889,7 @@ class RealLibraryTests(unittest.TestCase):
     def test_top_level_sub_commands_match(self):
         code, text = self.help_text()
         self.assertEqual(code, 0)
-        choices = argparse_choices(text)
-        expected = sorted(load_build().AD_SUBCOMMANDS)
-        if choices is None:
-            for name in expected:
-                self.assertEqual(self.help_text(name)[0], 0, "ad.py %s --help failed" % name)
-            return
-        self.assertEqual(choices, expected)
+        self.assertEqual(argparse_choices(text), sorted(load_build().AD_SUBCOMMANDS))
 
     def test_second_level_names_match(self):
         for name, second_level in sorted(load_build().AD_SUBCOMMANDS.items()):
@@ -897,6 +901,11 @@ class RealLibraryTests(unittest.TestCase):
             if choices is None:
                 continue
             self.assertEqual(choices, sorted(second_level), "ad.py %s" % name)
+
+    def test_hook_names_match_the_dispatch_table_in_ad_py(self):
+        source = read(self.ad)
+        for name in load_build().AD_SUBCOMMANDS["hook"]:
+            self.assertIn('"%s"' % name, source, "ad.py does not name the hook %r" % name)
 
     def test_help_calls_leave_no_state_directory(self):
         self.help_text()

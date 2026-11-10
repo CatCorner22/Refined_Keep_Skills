@@ -336,15 +336,9 @@ def cmd_provenance(args):
 
 
 def _finding_text(finding):
-    """Render one lint finding, whatever shape the rules module gives it."""
-    if isinstance(finding, dict):
-        line = finding.get("line")
-        label = finding.get("kind") or finding.get("label") or finding.get("code") or ""
-        message = finding.get("message") or finding.get("text") or finding.get("rule") or ""
-        prefix = "L%s " % line if line else ""
-        middle = "[%s] " % label if label else ""
-        return (prefix + middle + str(message)).strip()
-    return str(finding)
+    """Render one lint finding as ``L<line> [kind] message``; line 0 means the whole file."""
+    prefix = "L%d " % finding["line"] if finding.get("line") else ""
+    return "%s[%s] %s" % (prefix, finding.get("kind", ""), finding.get("message", ""))
 
 
 def cmd_rules(args):

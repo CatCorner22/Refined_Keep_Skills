@@ -193,7 +193,8 @@ def run_pandoc(pandoc, markdown, title, options, out):
     os.close(descriptor)
     work = tempfile.mkdtemp(prefix='living-reference-')
     try:
-        command = [pandoc, '-f', 'gfm', '-o', temporary, '--metadata', 'pagetitle=' + title]
+        command = [pandoc, '-f', 'gfm', '--wrap=none', '-o', temporary,
+                   '--metadata', 'pagetitle=' + title]
         if options.to == 'pdf':
             command.append('--pdf-engine=' + find_pdf_engine(options.pdf_engine))
         else:

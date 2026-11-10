@@ -217,7 +217,7 @@ General rule: exit code 0 means success, or that a check allowed or passed. Exit
 | `manifest record PATH [--range A-B]... [--summary TEXT] [--url URL]` | Records a read or a fetch in the read manifest. | 0; 2 if the file does not exist and no `--url` is given |
 | `manifest check PATH` | Prints 1 status line for the file: `UNCHANGED`, `CHANGED`, `MISSING` or `NOT IN MANIFEST`. | 0 for `UNCHANGED`; 1 otherwise |
 | `manifest show` | Prints the read manifest. | 0 |
-| `ledger add KIND TEXT...` | Adds 1 entry to the ledger. KIND is exactly GRANT, FORBID, STOP, ACCEPT, SCOPE or NOTE. | 0; 2 for an unknown kind |
+| `ledger add KIND TEXT...` | Adds 1 entry to the ledger. KIND is GRANT, FORBID, STOP, ACCEPT, SCOPE or NOTE. | 0; 2 for an unknown kind |
 | `ledger check ACTION...` | Prints the most recent GRANT or FORBID entry that shares keywords with the action. A match is a keyword match: read the entry before you rely on it. | 0 for a GRANT match; 1 for a FORBID match; 3 for no match |
 | `ledger show` / `ledger clear` | Prints the ledger, or moves it aside to a dated file. | 0 |
 | `checkpoint write [TEXT...]` / `checkpoint show` | Writes the checkpoint (from standard input when no text is given), or prints it. | 0 |

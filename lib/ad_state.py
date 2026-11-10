@@ -349,7 +349,7 @@ def _basename_of(target):
     """Return the last path component of a path or of a URL (query and fragment removed)."""
     text = target
     if "://" in text:
-        text = re.split(r"[?#]", text, 1)[0]
+        text = re.split(r"[?#]", text, maxsplit=1)[0]
     return os.path.basename(text.rstrip("/"))
 
 
