@@ -3,7 +3,7 @@ name: claim-evidence-pairing
 description: "Pair every load-bearing claim in a written deliverable with its source, a verbatim quote and a confidence level, and quote tool output when it is the evidence. Use when you write a report, a diagnosis such as the bug is in X, a summary of sources, or any number, date or version."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" provenance *)'
 ---
 # Claim-evidence pairing

@@ -30,10 +30,11 @@ import sys
 import tempfile
 import zipfile
 
-VERSION_DEFAULT = "2.0.0"
+VERSION_DEFAULT = "2.1.0"
 
 SCRIPTED_SKILLS = (
     "autonomy-ledger",
+    "backward-review-gate",
     "claim-evidence-pairing",
     "completion-evidence-gate",
     "context-budget-governor",
@@ -85,6 +86,7 @@ AD_SUBCOMMANDS = {
     "fence-check": (),
     "fetch-check": (),
     "gate": (),
+    "review": (),
     "trim": (),
     "provenance": ("add", "show", "audit"),
     "rules": ("lint", "rewrite", "compile"),
@@ -101,6 +103,10 @@ AD_SUBCOMMANDS = {
         "log",
         "log-failure",
         "completion-gate",
+        "review-gate",
+        "stop",
+        "pre-plan",
+        "review-reminder",
         "reinject",
         "fetch-guard",
         "scope-fence",
@@ -473,7 +479,7 @@ def check_skill_set(root):
             findings.append(".claude/skills/%s: skill folder missing" % name)
     for name in present:
         if name not in ALL_SKILLS:
-            findings.append(".claude/skills/%s: unexpected folder (not one of the 17 skills)" % name)
+            findings.append(".claude/skills/%s: unexpected folder (not one of the 18 skills)" % name)
     return findings
 
 

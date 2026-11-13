@@ -3,7 +3,7 @@ name: negative-constraint-compiler
 description: "Turn never, do not and must not rules into positive rules with a trigger and a check, and turn the ones that can be blocked into deny rules or a hook, because a written rule is context and not enforcement. Use when you write or edit a rules file, or when a written rule was broken anyway."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" rules *)'
 ---
 # Negative constraint compiler

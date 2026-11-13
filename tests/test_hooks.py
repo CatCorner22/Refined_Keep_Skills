@@ -22,7 +22,7 @@ HAVE_GUARDS = all(os.path.isfile(os.path.join(LIB, name)) for name in ("ad_shell
 NEEDS_GUARDS = "lib/ad_shell.py or lib/ad_guards.py is not present yet"
 
 HOOK_NAMES = ("session-start", "pre-bash", "pre-write", "pre-fetch", "read-cache", "record-read",
-              "log", "log-failure", "completion-gate")
+              "log", "log-failure", "completion-gate", "review-gate", "stop", "pre-plan", "review-reminder")
 LEGACY_NAMES = ("reinject", "fetch-guard", "scope-fence", "validate-call", "log-trim")
 
 EVIDENCE = ("Acceptance: unit tests green\nCommand: npm test\nOutput: 48 passing (2m)\n"
@@ -162,7 +162,7 @@ class DispatchTests(HookCase):
         self.assertEqual((missing.returncode, missing.stdout), (0, b""))
         present = subprocess.run([sys.executable, "-c", bootstrap, AD, "version"], stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, env=self.env, timeout=60)
-        self.assertEqual((present.returncode, present.stdout), (0, b"agent-discipline 2.0.0\n"))
+        self.assertEqual((present.returncode, present.stdout), (0, b"agent-discipline 2.1.0\n"))
 
     def test_hooks_use_the_input_cwd_to_find_the_state_directory(self):
         # HC-09 / GS-06: hook state used to fork when Claude changed directory.

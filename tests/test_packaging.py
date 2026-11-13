@@ -2,7 +2,7 @@
 
 Two groups:
 
-* Fixture tests build a small complete tree (lib/ plus 17 skills) inside a
+* Fixture tests build a small complete tree (lib/ plus 18 skills) inside a
   temporary directory and exercise every build.py rule on it.
 * Real-tree tests run the same checks on this repository. Each one skips with
   a reason while the part it needs (lib/, the skills, dist/) does not exist yet.
@@ -33,18 +33,21 @@ PLUGIN_SCRIPT = "${CLAUDE_PLUGIN_ROOT}/lib/ad.py"
 PROJECT_SCRIPT = "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py"
 EXPECTED_HOOKS = {
     "SessionStart": [(None, "session-start")],
+    "UserPromptSubmit": [(None, "review-reminder")],
     "PreToolUse": [
         ("Bash|PowerShell", "pre-bash"),
         ("Write|Edit|NotebookEdit", "pre-write"),
         ("WebFetch", "pre-fetch"),
         ("Read", "read-cache"),
+        ("ExitPlanMode", "pre-plan"),
     ],
     "PostToolUse": [
         ("Read", "record-read"),
         ("Bash|PowerShell|Write|Edit|NotebookEdit|WebFetch", "log"),
     ],
     "PostToolUseFailure": [("Bash|PowerShell", "log-failure")],
-    "Stop": [(None, "completion-gate")],
+    "Stop": [(None, "stop")],
+    "SubagentStop": [(None, "review-gate")],
 }
 HOOK_TIMEOUT_SECONDS = 10
 
@@ -76,7 +79,7 @@ def skill_text(name, scripted, body_extra=""):
         'description: "Keeps one thing checkable. Use when a test needs a valid skill."',
         'compatibility: "Instruction-only skill."',
         "metadata:",
-        '  version: "2.0.0"',
+        '  version: "2.1.0"',
     ]
     if scripted:
         lines.append("allowed-tools: 'Bash(python3 \"${CLAUDE_SKILL_DIR}/scripts/ad.py\" manifest *)'")
@@ -106,7 +109,7 @@ class FixtureTree(unittest.TestCase):
         for file_name in self.build.LIB_FILES:
             content = "# %s\n" % file_name
             if file_name == "ad_core.py":
-                content += 'VERSION = "2.0.0"\n'
+                content += 'VERSION = "2.1.0"\n'
             write(os.path.join(self.root, "lib", file_name), content)
         for name in self.build.ALL_SKILLS:
             scripted = name in self.build.SCRIPTED_SKILLS
@@ -117,7 +120,7 @@ class FixtureTree(unittest.TestCase):
         )
         write(
             os.path.join(self.root, ".claude-plugin", "plugin.json"),
-            json.dumps({"name": "agent-discipline", "version": "2.0.0"}),
+            json.dumps({"name": "agent-discipline", "version": "2.1.0"}),
         )
 
     def skill_md(self, name):
@@ -350,8 +353,8 @@ class SkillTextTests(FixtureTree):
         self.assert_finding("allowed-tools holds a bare python rule")
 
     def test_version_mismatch_is_reported(self):
-        self.replace_in_skill("premise-check", 'version: "2.0.0"', 'version: "1.0.0"')
-        self.assert_finding("versions differ: 1.0.0, 2.0.0")
+        self.replace_in_skill("premise-check", 'version: "2.1.0"', 'version: "1.0.0"')
+        self.assert_finding("versions differ: 1.0.0, 2.1.0")
 
     def test_top_level_bin_directory_is_reported(self):
         os.makedirs(os.path.join(self.root, "bin"))
@@ -377,8 +380,8 @@ class FrontmatterParserTests(unittest.TestCase):
         self.assertEqual(parsed["compatibility"], "It's fine: yes")
 
     def test_nested_map_and_list(self):
-        parsed = self.parse('metadata:\n  version: "2.0.0"\nallowed-tools:\n  - Bash(a *)\n  - Bash(b *)')
-        self.assertEqual(parsed["metadata"], {"version": "2.0.0"})
+        parsed = self.parse('metadata:\n  version: "2.1.0"\nallowed-tools:\n  - Bash(a *)\n  - Bash(b *)')
+        self.assertEqual(parsed["metadata"], {"version": "2.1.0"})
         self.assertEqual(parsed["allowed-tools"], ["Bash(a *)", "Bash(b *)"])
 
     def test_folded_block_text(self):
@@ -685,12 +688,12 @@ class CommandLineTests(FixtureTree):
 
 
 class BuildToolSourceTests(unittest.TestCase):
-    def test_skill_lists_cover_17_distinct_skills(self):
+    def test_skill_lists_cover_18_distinct_skills(self):
         build = load_build()
-        self.assertEqual(len(build.SCRIPTED_SKILLS), 11)
+        self.assertEqual(len(build.SCRIPTED_SKILLS), 12)
         self.assertEqual(len(build.SCRIPT_FREE_SKILLS), 5)
-        self.assertEqual(len(build.ALL_SKILLS), 17)
-        self.assertEqual(len(set(build.ALL_SKILLS)), 17)
+        self.assertEqual(len(build.ALL_SKILLS), 18)
+        self.assertEqual(len(set(build.ALL_SKILLS)), 18)
         self.assertEqual(len(build.LIB_FILES), 8)
 
     def test_build_tool_and_this_test_parse_as_python_3_8(self):
@@ -738,7 +741,7 @@ class RealManifestTests(unittest.TestCase):
     def test_plugin_manifest_fields(self):
         manifest = self.load(".claude-plugin", "plugin.json")
         self.assertEqual(manifest["name"], "agent-discipline")
-        self.assertEqual(manifest["version"], "2.0.0")
+        self.assertEqual(manifest["version"], "2.1.0")
         self.assertEqual(manifest["author"]["name"], "CatCorner22")
         self.assertTrue(manifest["description"].strip())
         self.assertEqual(manifest["skills"], ["./.claude/skills/"])
@@ -922,7 +925,7 @@ class RealTreeTests(unittest.TestCase):
             self.skipTest("lib/ does not exist yet")
         missing = [name for name in self.build.ALL_SKILLS if not os.path.isfile(os.path.join(REPO, ".claude", "skills", name, "SKILL.md"))]
         if missing:
-            self.skipTest("%d of 17 skills do not exist yet (first: %s)" % (len(missing), missing[0]))
+            self.skipTest("%d of 18 skills do not exist yet (first: %s)" % (len(missing), missing[0]))
 
     def test_check_is_clean_apart_from_dist(self):
         self.assertEqual(self.build.check(REPO, include_dist=False), [])
@@ -957,7 +960,7 @@ class RealTreeTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             outputs.add(completed.stdout.strip())
-        self.assertEqual(outputs, {"agent-discipline 2.0.0"})
+        self.assertEqual(outputs, {"agent-discipline 2.1.0"})
         for name in self.build.SCRIPTED_SKILLS:
             cache = os.path.join(REPO, ".claude", "skills", name, "scripts", "__pycache__")
             self.assertFalse(os.path.exists(cache), cache)

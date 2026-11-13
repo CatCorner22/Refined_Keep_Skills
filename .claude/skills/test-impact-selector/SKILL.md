@@ -3,7 +3,7 @@ name: test-impact-selector
 description: "Map changed files to the tests that cover them, run that subset first, and report which tests you skipped and why. Use when you run tests after an edit, when the full suite is slow or noisy, or before you report that tests pass. Run the full suite when shared or configuration code changed."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" test-impact *)'
 ---
 # Test impact selector
