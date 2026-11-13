@@ -38,7 +38,7 @@ try:
 except ImportError:  # Windows: no advisory lock, proceed without one.
     fcntl = None
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 STATE_DIR_NAME = ".agent"
 MARKER_NAME = ".ad-state"

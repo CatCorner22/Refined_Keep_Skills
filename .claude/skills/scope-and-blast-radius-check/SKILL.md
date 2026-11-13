@@ -3,7 +3,7 @@ name: scope-and-blast-radius-check
 description: "Resolve every target, classify the action as reversible or irreversible, and get the user's go-ahead before a destructive or wide-reaching action. Use before delete, drop, reset, overwrite, force push, deploy, migrate or publish, before writing outside the project, and when development and production might be confused."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" fence-check *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" scope show) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" approvals show)'
 ---
 # Scope and blast-radius check

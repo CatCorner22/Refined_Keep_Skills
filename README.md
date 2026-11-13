@@ -1,12 +1,12 @@
 # Agent-discipline skills
 
-Version 2.0.0.
+Version 2.1.0.
 
 ## 1. What this repository is
 
-This repository holds 17 agent skills for Claude. Each skill is a folder with a `SKILL.md` file that tells Claude how to keep one part of its work checkable: what it read, what the user allowed, what it changed, and what evidence supports a claim that work is done.
+This repository holds 18 agent skills for Claude. Each skill is a folder with a `SKILL.md` file that tells Claude how to keep one part of its work checkable: what it read, what the user allowed, what it changed, and what evidence supports a claim that work is done.
 
-11 of the 17 skills carry a small command-line tool (the CLI, `ad.py`) that stores state on disk. 5 skills are instructions only. 1 skill (`living-reference`) carries its own 2 scripts.
+12 of the 18 skills carry a small command-line tool (the CLI, `ad.py`) that stores state on disk. 5 skills are instructions only. 1 skill (`living-reference`) carries its own 2 scripts.
 
 The repository serves 3 surfaces from 1 set of files:
 
@@ -22,8 +22,9 @@ Every skill works with no hooks. The hooks add enforcement. No skill needs them.
 
 ```
 README.md, CHANGELOG.md, .gitignore
-.claude/skills/<name>/SKILL.md      the 17 skills
-.claude/skills/<name>/scripts/      generated copy of lib/ (11 scripted skills)
+CLAUDE.md                           the rules for sessions in this repository
+.claude/skills/<name>/SKILL.md      the 18 skills
+.claude/skills/<name>/scripts/      generated copy of lib/ (12 scripted skills)
 lib/                                the only hand-edited copy of the CLI library (8 files)
 hooks/hooks.json                    the plugin hooks
 docs/hooks-settings-example.json    the same hooks for a project settings file
@@ -31,15 +32,16 @@ docs/hooks-settings-example.json    the same hooks for a project settings file
 .claude-plugin/marketplace.json     a marketplace with this 1 plugin
 tools/build.py                      sync, check, validate, zip
 tests/                              the test suite
-dist/<name>.zip                     the 17 upload packages for claude.ai (generated)
+dist/<name>.zip                     the 18 upload packages for claude.ai (generated)
 ```
 
-## 2. The 17 skills
+## 2. The 18 skills
 
 | Skill | What it prevents | Form |
 |---|---|---|
 | `ask-or-assume` | A question that interrupts the user for no reason, and a silent guess that is expensive to undo | instructions only |
 | `autonomy-ledger` | Asking again for a permission the user already gave, and acting on a permission the user never gave | scripted |
+| `backward-review-gate` | Presenting or acting on a plan, a reply or a deliverable that nobody reviewed from its last part to its first part and then re-read | scripted |
 | `claim-evidence-pairing` | A claim in a deliverable with no source, no quote and no stated confidence | scripted |
 | `completion-evidence-gate` | A statement that work is done with no command, no output and no diff behind it | scripted |
 | `context-budget-governor` | Losing the goal, the decisions and the next step when the conversation is compacted | scripted |
@@ -103,7 +105,7 @@ What differs on this surface:
 
 ### 3.3 Plugin (optional, local terminal sessions)
 
-The plugin delivers the same 17 skills plus the hooks in `hooks/hooks.json`. The plugin skills are namespaced: `/agent-discipline:<name>`.
+The plugin delivers the same 18 skills plus the hooks in `hooks/hooks.json`. The plugin skills are namespaced: `/agent-discipline:<name>`.
 
 From a Claude Code session:
 
@@ -128,7 +130,7 @@ claude --plugin-dir /path/to/Refined_Keep_Skills
 Notes:
 
 - Add the marketplace in the `owner/repo` form shown above. The plugin entry uses the relative source `./`, which needs the whole repository. A bare URL to `marketplace.json` downloads only that file, and the install then fails.
-- `plugin.json` sets `"version": "2.0.0"`. Claude Code keeps an installed plugin on that version until the string changes. A release therefore changes the version in `plugin.json`, in `lib/ad_core.py` and in every `SKILL.md`. `tools/build.py check` fails when they differ.
+- `plugin.json` sets `"version": "2.1.0"`. Claude Code keeps an installed plugin on that version until the string changes. A release therefore changes the version in `plugin.json`, in `lib/ad_core.py` and in every `SKILL.md`. `tools/build.py check` fails when they differ.
 - A cloud session does not install a plugin that a repository declares, and it does not load a plugin that is enabled only in your user settings. For hooks in a cloud session, use section 8.2.
 - If you work inside a clone of this repository with the plugin enabled, each skill loads 2 times: once as a project skill and once as a plugin skill.
 - The repository has no LICENSE file. The owner has not chosen a license.
@@ -213,7 +215,7 @@ General rule: exit code 0 means success, or that a check allowed or passed. Exit
 
 | Sub-command | What it does | Exit codes |
 |---|---|---|
-| `version` | Prints `agent-discipline 2.0.0`. | 0 |
+| `version` | Prints `agent-discipline 2.1.0`. | 0 |
 | `manifest record PATH [--range A-B]... [--summary TEXT] [--url URL]` | Records a read or a fetch in the read manifest. | 0; 2 if the file does not exist and no `--url` is given |
 | `manifest check PATH` | Prints 1 status line for the file: `UNCHANGED`, `CHANGED`, `MISSING` or `NOT IN MANIFEST`. | 0 for `UNCHANGED`; 1 otherwise |
 | `manifest show` | Prints the read manifest. | 0 |
@@ -228,6 +230,7 @@ General rule: exit code 0 means success, or that a check allowed or passed. Exit
 | `fence-check COMMAND...` | Runs the scope fence on a command without running the command. Prints `ALLOW`, or `BLOCK` with the label and the reason. | 0 for ALLOW; 1 for BLOCK |
 | `fetch-check COMMAND...` | Runs the fetch guard on a command without running the command. | 0 for ALLOW; 1 for BLOCK |
 | `gate [TEXT...] [--file PATH] [--lenient]` | Checks a message for a completion claim and for the evidence block. Prints `PASS` or the reason. | 0 for PASS; 1 otherwise |
+| `review [TEXT...] [--file PATH] [--plan]` | Checks a reply, or with `--plan` a plan, for a complete review record. Prints `PASS` or what the record lacks. | 0 for PASS; 1 otherwise |
 | `trim FILE` or `trim -` | Prints a shortened view of a long output (`-` reads standard input). It stores nothing. | 0 |
 | `provenance add SECTION SOURCE [--quote Q] [--confidence C]` / `provenance show [SECTION]` | Records or prints source rows. | 0 |
 | `provenance audit FILE` | Lists the headings of a document that have no source row. | 0 when every heading has a row; 1 otherwise |
@@ -237,7 +240,7 @@ General rule: exit code 0 means success, or that a check allowed or passed. Exit
 | `test-impact [--base REF] [--root DIR]` | Maps changed files to the tests to run first. | 0; 2 outside a git repository or for a bad `--base` |
 | `regress init [--force]` / `regress show` / `regress record ID RESULT MODEL [--note N] [--force]` / `regress report` | Creates, prints, records against and summarizes the regression set. | 0; 2 for an unknown ID without `--force` |
 | `deny-regex PATTERN...` | Hook form: denies a shell command that matches a pattern. | 0 |
-| `hook NAME` | Hook entry point. NAME is 1 of `session-start`, `pre-bash`, `pre-write`, `pre-fetch`, `read-cache`, `record-read`, `log`, `log-failure`, `completion-gate`. | always 0 |
+| `hook NAME` | Hook entry point. NAME is 1 of `session-start`, `pre-bash`, `pre-write`, `pre-fetch`, `read-cache`, `record-read`, `log`, `log-failure`, `completion-gate`, `review-gate`, `stop`, `pre-plan`, `review-reminder`. | always 0 |
 
 `hook NAME` also accepts the version 1 names `reinject`, `fetch-guard`, `scope-fence`, `validate-call` and `log-trim`.
 
@@ -254,6 +257,8 @@ General rule: exit code 0 means success, or that a check allowed or passed. Exit
 | `AD_HASH_MAX_MB` | 64 | Size up to which the read manifest hashes the whole file |
 | `AD_GATE` | on | `off` turns the completion gate off |
 | `AD_GATE_STRICT` | 1 | `0` stops the gate from comparing the `Command:` line with the tool log |
+| `AD_REVIEW` | on | `off` turns off the review gate and the 4 hooks of `backward-review-gate` |
+| `AD_REVIEW_MIN_CHARS` | 0 | Length of prose below which the review gate lets a reply pass with no review record; 0 means that every reply needs the record |
 | `AD_TRIM_HOOK` | off | `1` lets the log hook replace a long shell output with a trimmed view |
 | `AD_TRIM_CHARS` | 6000 | Length from which the trim applies |
 
@@ -299,14 +304,17 @@ No skill pre-approves `approve`, `approvals clear`, `scope set` or `scope add`. 
 | Event | Tools | Hook name | What it does |
 |---|---|---|---|
 | SessionStart | | `session-start` | After a resume or a compaction, it adds the reinjection to the context. At startup, it adds 1 line that says what state exists. It adds nothing when no state exists. |
+| UserPromptSubmit | | `review-reminder` | Adds the backward review rule to the context of every prompt. It never blocks. |
 | PreToolUse | Bash, PowerShell | `pre-bash` | Runs the fetch guard, the scope fence and the retry rule, in that order. The first denial wins. |
 | PreToolUse | Write, Edit, NotebookEdit | `pre-write` | Runs the scope fence on the file path. It never reads the file content. |
 | PreToolUse | WebFetch | `pre-fetch` | Runs the duplicate rule of the fetch guard on the URL. |
 | PreToolUse | Read | `read-cache` | Never blocks. When the same session reads the same unchanged lines again, it adds a note with the recorded summary. |
+| PreToolUse | ExitPlanMode | `pre-plan` | Denies a plan whose text has no complete review record, and gives the 5 steps of the review. When the hook input carries no plan text, it adds the rule and lets the call proceed. |
 | PostToolUse | Read | `record-read` | Records the file and the line range in the read manifest. |
 | PostToolUse | Bash, PowerShell, Write, Edit, NotebookEdit, WebFetch | `log` | Appends 1 line to the tool log. Records a fetched file in the read manifest. |
 | PostToolUseFailure | Bash, PowerShell | `log-failure` | Appends the failed call and its exit code to the tool log. |
-| Stop | | `completion-gate` | When the last message claims completion with no evidence block, it prompts once for the block. It does not prompt a second time for the same stop attempt. |
+| Stop | | `stop` | Runs 2 checks on the last message in 1 process. The review gate prompts for the review record when the message has none or an incomplete one. The completion gate prompts for the evidence block when the message claims completion with none. The hook prompts once with both reasons and does not prompt a second time for the same stop attempt. The hook name `completion-gate` still runs the completion gate alone. |
+| SubagentStop | | `review-gate` | Runs the review gate on the final message of a sub-agent. It prompts once. |
 
 Properties of every hook:
 
@@ -336,10 +344,41 @@ Install the plugin (section 3.3). Claude Code loads `hooks/hooks.json` with the 
 
 Do not enable both routes in 1 project. Both sets of hooks would then run on every tool call.
 
-## 9. Limits
+## 9. How to keep the backward review engaged in every session
+
+A skill loads only when Claude judges that its description fits the task. The body of a skill is not in the context until then. No frontmatter key and no setting makes a skill load in every session, and Claude Code does not load a `CLAUDE.md` from a plugin. `backward-review-gate` therefore has 3 layers. Use every layer that your surface offers.
+
+| Layer | What it is | Where it works | What it does |
+|---|---|---|---|
+| 1. The always-on rule | 6 numbered lines in `.claude/skills/backward-review-gate/references/always-on-rule.md` | every surface | The surface loads the rule in every session. The rule tells Claude to do the review and to load the skill. |
+| 2. The skill | `backward-review-gate` | every surface | It gives the full procedure, the 4 questions for each part, the review record and the contingencies. |
+| 3. The hooks | `review-reminder`, `pre-plan`, `stop`, `review-gate` | Claude Code only | They repeat the rule on every prompt and check that each plan and each final message ends with a complete review record. |
+
+Where to put the always-on rule:
+
+| Surface | Place | Who can do it |
+|---|---|---|
+| claude.ai chat, desktop app and mobile app | the field for your personal preferences in the settings of your profile | you, in the app |
+| claude.ai project | the instructions of the project | you, in the app |
+| Claude Code on your machine | `~/.claude/CLAUDE.md` | you, on that machine |
+| Claude Code in 1 repository, cloud sessions included | `CLAUDE.md` at the root of the repository, committed | anyone who can commit |
+
+This repository carries the rule in its own `CLAUDE.md`, so a session that works in this repository has layer 1.
+
+What each layer cannot do:
+
+- Layers 1 and 2 are instructions. Claude follows an instruction or, now and then, does not. Nothing checks the result.
+- Layer 3 checks the form of the review record: the number of parts, the words `last to first`, the forward re-read and the `Corrections:` value. It cannot prove that Claude did the review. What it does guarantee is that a plan or a final message with no record goes back to Claude 1 time with the 5 steps of the review.
+- The Stop hook acts after Claude wrote the final message, so you may already see that message. The review that the hook prompts for then arrives as a second message with the corrections.
+- claude.ai runs no hooks, so claude.ai has layers 1 and 2 only.
+- A cloud session reads hooks from the `.claude/settings.json` of the repository (section 8.2) and does not read `~/.claude/` from your machine.
+
+To turn the review hooks off for 1 session, start Claude Code with `AD_REVIEW=off`. To exempt short replies, set `AD_REVIEW_MIN_CHARS` to a number of characters.
+
+## 10. Limits
 
 - The scope fence is a seatbelt, not a sandbox. It recognizes the command forms that Claude usually writes. A command that hides its effect (a script file that deletes, an unusual tool, an encoded string) passes. For a real boundary, use the permission settings and the sandbox of the host.
-- The checks are heuristics. The completion gate recognizes common completion phrases and can miss a claim or flag ordinary prose. `ledger check` matches keywords. `test-impact` maps files to tests by name and by text reference. `rules lint` matches phrases.
+- The checks are heuristics. The review gate reads the form of the review record and cannot tell a real review from a record that Claude wrote without one. The completion gate recognizes common completion phrases and can miss a claim or flag ordinary prose. `ledger check` matches keywords. `test-impact` maps files to tests by name and by text reference. `rules lint` matches phrases.
 - Planted state. A repository can ship its own `.agent/` directory, with a ledger and a checkpoint that someone else wrote. The mitigations: an approval expires and matches 1 exact command; the reinjection labels its entries as records, not instructions; at session startup the hook adds only a 1-line summary. Treat a state directory that you did not create as untrusted, and delete it.
 - Without hooks, every skill is advisory. Claude follows the procedure in the skill or it does not. This is the case on claude.ai, and in Claude Code unless you enable the hooks.
 - A denial needs someone to answer. In an unattended run, a blocked command stays blocked.
@@ -347,7 +386,7 @@ Do not enable both routes in 1 project. Both sets of hooks would then run on eve
 - State is local. The state directory belongs to 1 checkout or 1 sandbox. It does not sync between machines or between claude.ai conversations.
 - The tool log holds command lines. The CLI redacts obvious secrets (authorization headers, `token=` and `password=` values, credentials in URLs) and git ignores the state directory. Do not rely on the redaction for a secret in an unusual form.
 
-## 10. How to change a skill
+## 11. How to change a skill
 
 To change the text of a skill:
 
@@ -359,7 +398,7 @@ To change the text of a skill:
 To change the CLI:
 
 1. Edit the files in `lib/` only. Never edit a file under a skill's `scripts/`: the next sync overwrites it, and until then `check` fails.
-2. Run `python3 tools/build.py all`. This copies `lib/` into the 11 scripted skills and rebuilds the zips.
+2. Run `python3 tools/build.py all`. This copies `lib/` into the 12 scripted skills and rebuilds the zips.
 3. Run `python3 -m unittest discover -s tests`.
 4. Commit `lib/`, the generated copies and `dist/` together.
 
@@ -377,7 +416,7 @@ The zips are deterministic: sorted members, the fixed timestamp 1980-01-01, mode
 
 `build.py` needs only the standard library. When PyYAML is installed, `build.py` also parses each frontmatter with PyYAML and reports any disagreement. When PyYAML is missing, it prints a notice and skips that cross-check.
 
-## 11. Tests
+## 12. Tests
 
 ```
 python3 -m unittest discover -s tests
@@ -391,7 +430,7 @@ for v in 3.8 3.9 3.11 3.12 3.13; do python$v -B -m unittest discover -s tests ||
 
 The tests use temporary directories, inject the clock, and need no network. `tests/test_packaging.py` runs the `check` logic on this repository, so a stale copy or a stale zip fails the suite.
 
-## 12. What changed from version 1
+## 13. What changed from version 1
 
 The details are in `CHANGELOG.md`. In summary:
 

@@ -18,6 +18,24 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "review-reminder"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",
@@ -82,6 +100,23 @@
               "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
               "hook",
               "read-cache"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "pre-plan"
             ],
             "timeout": 10
           }
@@ -154,7 +189,25 @@
               "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
               "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
               "hook",
-              "completion-gate"
+              "stop"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os,runpy,sys; p=sys.argv[1]; sys.argv=sys.argv[1:]; os.path.isfile(p) and runpy.run_path(p, run_name='__main__')",
+              "${CLAUDE_PROJECT_DIR}/.claude/skills/read-manifest/scripts/ad.py",
+              "hook",
+              "review-gate"
             ],
             "timeout": 10
           }

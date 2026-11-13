@@ -2,6 +2,22 @@
 
 This file lists the changes that a user of the skills can notice. The format follows "Keep a Changelog". Version numbers are the `version` in `.claude-plugin/plugin.json`, the `VERSION` in `lib/ad_core.py` and the `metadata.version` in every `SKILL.md`.
 
+## [2.1.0] - 2026-11-13
+
+### Added
+
+- New skill `backward-review-gate` (scripted). Before Claude presents a plan, sends a reply, delivers work or acts on a plan, Claude reviews the work product from its last part to its first part, corrects every error, re-reads it from first to last, and ends it with a review record. The repository now holds 18 skills, 12 of them scripted.
+- `references/always-on-rule.md` in that skill: 6 numbered lines for the instructions that a surface loads in every session (claude.ai personal preferences, claude.ai project instructions, `~/.claude/CLAUDE.md`, a repository `CLAUDE.md`), with the steps for each surface.
+- `CLAUDE.md` at the root of this repository, with the always-on rule.
+- New sub-command `review [TEXT...] [--file PATH] [--plan]`: checks a reply or a plan for a complete review record. Exit code 0 for PASS, 1 otherwise.
+- New hook names: `review-reminder` (UserPromptSubmit), `pre-plan` (PreToolUse on ExitPlanMode), `review-gate` (SubagentStop) and `stop` (Stop).
+- New settings: `AD_REVIEW=off` turns the review gate and its hooks off. `AD_REVIEW_MIN_CHARS` sets a length below which a reply needs no review record (default 0: every reply needs it).
+
+### Changed
+
+- The Stop entry in `hooks/hooks.json` and in `docs/hooks-settings-example.json` runs `hook stop`, which runs the review gate and the completion gate in 1 process and prompts once with both reasons. `hook completion-gate` still works and runs the completion gate alone.
+- With the hooks enabled, every final message and every plan now needs a review record. If you copied the hooks into a project settings file, copy them again to get the 3 new entries.
+
 ## [2.0.0] - 2026-11-10
 
 Version 2 is a rewrite after a review of version 1. A GRANT entry in the ledger no longer unlocks anything: record an approval instead.

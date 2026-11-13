@@ -3,7 +3,7 @@ name: completion-evidence-gate
 description: "Attach an evidence block to every completion claim: what counts as done, the command you ran, its quoted output, the diff, and what you did not verify. Use when you are about to say that work is done, fixed, passing or implemented, or when you write a pull request description or a status report."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" gate *)'
 ---
 # Completion evidence gate

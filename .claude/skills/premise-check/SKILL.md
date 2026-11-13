@@ -3,7 +3,7 @@ name: premise-check
 description: "Verify a fact or diagnosis that the user states as the basis of a request before building on it, and say in the first sentence when the evidence disagrees. Use when a request contains since, because, given that or obviously, or names a cause such as a broken layer, a deprecated API or a flaky test."
 compatibility: "Instruction-only skill. Works in claude.ai, Claude Code and the Skills API."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 # Premise check
 
