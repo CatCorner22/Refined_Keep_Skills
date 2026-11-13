@@ -443,3 +443,7 @@ The details are in `CHANGELOG.md`. In summary:
 - 1 source for the library, with generated copies, a drift check and deterministic zips.
 - A marketplace file, so that the plugin install commands work.
 - Unverified statistics, incident stories and personal details are removed from the skill texts.
+
+## 12. Other packages in this repository
+
+`chicken-little-overwatch/` holds Chicken Little Overwatch: 1 plugin and 1 skill for quality control and red-team review of LLM-assisted work. That folder stands alone. It has its own `README.md`, build tool, tests and packages, and the 18 skills and the build tool described above do not read it.
