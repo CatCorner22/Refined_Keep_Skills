@@ -1,0 +1,14 @@
+{
+  "name": "chicken-little",
+  "description": "The Chicken Little Overwatch plugin: quality control and red team for LLM-assisted work.",
+  "owner": {
+    "name": "CatCorner22"
+  },
+  "plugins": [
+    {
+      "name": "chicken-little-overwatch",
+      "source": "./chicken-little-overwatch",
+      "description": "Quality control, plain-language rewrite, and red-team swarm for LLM-assisted work."
+    }
+  ]
+}
