@@ -3,7 +3,7 @@ name: retrieval-verification-gate
 description: "Back every claim about a user's document with the source name, the location and a verbatim excerpt, and say whether the document was only visible, indexed, retrieved or read. Use when about to write that a file, report, attachment or project document says something, or that you reviewed it."
 compatibility: "Instruction-only skill. Works in claude.ai, Claude Code and the Skills API."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 # Retrieval verification gate
 

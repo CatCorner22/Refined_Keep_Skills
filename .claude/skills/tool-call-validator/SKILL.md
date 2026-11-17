@@ -3,7 +3,7 @@ name: tool-call-validator
 description: "Check a tool call before and after it runs: the working directory, the arguments, a bound on the output, then the exit code and the error text. Use before a shell, file or HTTP call that carries a path, a URL or a destructive flag, and whenever a call fails or returns nothing."
 compatibility: "Instruction-only skill. Works in claude.ai, Claude Code and the Skills API."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 # Tool-call validator
 

@@ -1,4 +1,4 @@
-"""Gates and observability: tool log, output trimmer, completion gate, provenance.
+"""Gates and observability: tool log, output trimmer, completion gate, review gate, provenance.
 
 Imports only ``ad_core`` from the library.
 """
@@ -757,6 +757,181 @@ def hook_completion_gate():
     if reason:
         ad_core.stop_block(reason)
     sys.exit(0)
+
+
+# --------------------------------------------------------------------------
+# Backward review
+# --------------------------------------------------------------------------
+
+REVIEW_TEMPLATE = ("Backward review: <N> parts, last to first; forward re-read done. "
+                   "Corrections: <what you corrected, or none>")
+# Markup that may surround the label; the underscore is listed because ``\w`` includes it.
+_REVIEW_MARKUP = r"(?:[^\w\n:\uff1a]|_)*"
+REVIEW_LINE_RE = re.compile(
+    r"(?i)^%s(?:\d+[.)]%s)?backward[ \t-]+review%s[:\uff1a](.*)$" % ((_REVIEW_MARKUP,) * 3))
+REVIEW_CONTINUATION_LINES = 3
+REVIEW_PARTS_RE = re.compile(r"(?i)\b(\d+)[ \t]+parts?\b")
+REVIEW_DIRECTION_RE = re.compile(r"(?i)\blast[ \t-]+to[ \t-]+first\b")
+REVIEW_REREAD_RE = re.compile(r"(?i)\bre-?read\b")
+REVIEW_CORRECTIONS_RE = re.compile(r"(?is)\bcorrections?[^\w\n:\uff1a]*[:\uff1a](.*)$")
+REVIEW_STEPS = (
+    "1. Split the %(kind)s into parts and count the parts.\n"
+    "2. Review the parts from the last part to the first part. For each part, check that every fact, "
+    "name, number, path and command in it is correct, and that an earlier part supplies everything "
+    "the part needs.\n"
+    "3. Correct every error that you find.\n"
+    "4. Re-read the whole %(kind)s from the first part to the last part, against the user's request.\n"
+    "5. End the %(kind)s with this line, filled in:\n%(template)s"
+)
+REVIEW_REMINDER = (
+    "Standing rule (backward-review-gate). Before you present a plan, send a reply, deliver work or "
+    "act on a plan: review it from its last part to its first part, correct every error that you find, "
+    "re-read it from its first part to its last part, and end it with this line, filled in:\n"
+    + REVIEW_TEMPLATE + "\n"
+    "Before you act on a plan, re-read the whole plan. "
+    "The size of the review follows the size of the work; no reply is exempt."
+)
+
+
+def review_enabled():
+    """Return False when ``AD_REVIEW=off`` turns the backward review checks off."""
+    return os.environ.get("AD_REVIEW", "").strip().lower() != "off"
+
+
+def find_review_record(message):
+    """Return the text of the last review record in ``message``, or None.
+
+    The review record is a line that starts with ``Backward review:`` (behind
+    bullets or bold markers, in any letter case) plus up to
+    ``REVIEW_CONTINUATION_LINES`` non-blank lines below it. Fenced code and
+    quoted lines are ignored, because they quote other text such as the
+    template itself.
+    """
+    if not isinstance(message, str):
+        return None
+    text = QUOTE_LINE_RE.sub("", FENCE_RE.sub("\n", message))
+    lines = text.splitlines()
+    record = None
+    for index, line in enumerate(lines):
+        match = REVIEW_LINE_RE.match(line)
+        if not match:
+            continue
+        parts = [match.group(1)]
+        for extra in lines[index + 1:index + 1 + REVIEW_CONTINUATION_LINES]:
+            if not extra.strip() or REVIEW_LINE_RE.match(extra):
+                break
+            parts.append(extra)
+        record = " ".join(part.strip() for part in parts).replace("`", "").strip()
+    return record
+
+
+def review_record_problem(record):
+    """Return what a review record lacks, or None when the record is complete."""
+    count = REVIEW_PARTS_RE.search(record)
+    if not count or int(count.group(1)) < 1:
+        return "it does not give the number of parts (for example `7 parts`)"
+    if not REVIEW_DIRECTION_RE.search(record):
+        return "it does not say that you reviewed the parts `last to first`"
+    corrections = REVIEW_CORRECTIONS_RE.search(record)
+    head = record[:corrections.start()] if corrections else record
+    if not REVIEW_REREAD_RE.search(head):
+        return "it does not say that you did the forward re-read"
+    if not corrections:
+        return "it has no `Corrections:` value (write what you corrected, or `none`)"
+    value = _clean_value(corrections.group(1)).rstrip(".").strip()
+    if not value or PLACEHOLDER_RE.match(value) or value.startswith("<"):
+        return "its `Corrections:` value is empty or a placeholder (write what you corrected, or `none`)"
+    return None
+
+
+def review_gate_decide(message, kind="reply", note=GATE_ONCE_NOTE):
+    """Decide whether ``message`` carries a complete review record; return a block reason or None.
+
+    1. ``AD_REVIEW=off``: pass.
+    2. No text, or prose shorter than ``AD_REVIEW_MIN_CHARS`` (default 0): pass.
+    3. No review record: block with the 5 steps.
+    4. A record that lacks the number of parts, the direction, the forward
+       re-read or the corrections: block and name what it lacks.
+
+    The check reads the form of the record. It cannot prove that the review
+    happened; the block itself makes the model do the review.
+    """
+    if not review_enabled():
+        return None
+    if not isinstance(message, str) or not message.strip():
+        return None
+    if len(_prose_of(message).strip()) < ad_core.env_int("AD_REVIEW_MIN_CHARS", 0, minimum=0):
+        return None
+    steps = REVIEW_STEPS % {"kind": kind, "template": REVIEW_TEMPLATE}
+    record = find_review_record(message)
+    if record is None:
+        reason = "This %s has no review record. Before it stands:\n%s" % (kind, steps)
+    else:
+        problem = review_record_problem(record)
+        if problem is None:
+            return None
+        reason = "The review record of this %s is incomplete: %s. Do the review:\n%s" % (kind, problem, steps)
+    if kind == "reply":
+        reason += "\nIf the review changes something that the user has already seen, state each correction plainly."
+    return (reason + "\n" + note).rstrip()
+
+
+def hook_review_gate():
+    """Stop or SubagentStop hook: prompt once for the review record of the final message."""
+    inp = ad_core.read_hook_input()
+    if inp.get("stop_hook_active"):
+        sys.exit(0)
+    reason = review_gate_decide(last_assistant_text(inp))
+    if reason:
+        ad_core.stop_block(reason)
+    sys.exit(0)
+
+
+def hook_stop():
+    """Stop hook: run the review gate and the completion gate in 1 process; block once with both reasons."""
+    inp = ad_core.read_hook_input()
+    if inp.get("stop_hook_active"):
+        sys.exit(0)
+    message = last_assistant_text(inp)
+    strict = os.environ.get("AD_GATE_STRICT", "1").strip() != "0"
+    session = _text_field(inp, "session_id") or None
+    reasons = [reason for reason in (
+        review_gate_decide(message),
+        completion_gate_decide(message, session=session, strict=strict),
+    ) if reason]
+    if reasons:
+        ad_core.stop_block("\n\n".join(reasons))
+    sys.exit(0)
+
+
+def hook_pre_plan():
+    """PreToolUse on ExitPlanMode: deny a plan that carries no complete review record.
+
+    The host injects the plan text into ``tool_input.plan``. When that field
+    is absent the hook cannot read the plan, so it lets the call proceed and
+    adds the reminder.
+    """
+    inp = ad_core.read_hook_input()
+    if not review_enabled():
+        sys.exit(0)
+    tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
+    plan = tool_input.get("plan")
+    if not isinstance(plan, str) or not plan.strip():
+        ad_core.allow(REVIEW_REMINDER)
+    reason = review_gate_decide(
+        plan, kind="plan",
+        note="Next step: do the review, add the line to the end of the plan file, then call ExitPlanMode again.")
+    if reason:
+        ad_core.deny(reason)
+    sys.exit(0)
+
+
+def hook_review_reminder():
+    """UserPromptSubmit hook: add the standing rule to the context of every prompt. Never blocks."""
+    ad_core.read_hook_input()
+    if not review_enabled():
+        sys.exit(0)
+    ad_core.allow(REVIEW_REMINDER, event="UserPromptSubmit")
 
 
 # --------------------------------------------------------------------------

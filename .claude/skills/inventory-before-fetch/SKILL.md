@@ -3,7 +3,7 @@ name: inventory-before-fetch
 description: "Check what is already available before downloading, fetching, cloning or asking the user to upload a file, and state the result in one inventory line. Use when a plan includes a download or re-download, when the user says a file is in a project, folder or attachment, or before saying a file is not accessible."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" manifest *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" fetch-check *)'
 ---
 # Inventory before fetch

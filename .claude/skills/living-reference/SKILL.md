@@ -3,7 +3,7 @@ name: living-reference
 description: "Build and maintain a living reference: one Markdown file of sourced rules with permanent section IDs, a source list, and a generated contents list, cite index, subject index and health report. Use when the user asks for a living document, master reference, outline, project bible or single source of truth that must stay current."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled scripts need Python 3.8 or later (standard library only); export also needs pandoc."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/refresh_reference.py" *)'
 ---
 

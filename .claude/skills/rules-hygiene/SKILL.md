@@ -3,7 +3,7 @@ name: rules-hygiene
 description: "Keep agent instruction files such as CLAUDE.md, AGENTS.md and .cursorrules short, specific and current, with the most-used facts first and hard constraints moved to settings or hooks. Use when you create or edit a rules file, when a rules file has grown long, or when the agent keeps ignoring a written rule."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" rules lint *)'
 ---
 # Rules hygiene

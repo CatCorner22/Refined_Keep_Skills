@@ -1,7 +1,7 @@
 {
   "name": "agent-discipline",
-  "version": "2.0.0",
-  "description": "17 skills that keep an agent's work checkable: a read manifest, a ledger of the user's permissions, a checkpoint, a scope fence, an evidence block for completion claims, rules hygiene, and a living reference document. Optional hooks add enforcement in Claude Code.",
+  "version": "2.1.0",
+  "description": "18 skills that keep an agent's work checkable: a backward review of every plan and reply, a read manifest, a ledger of the user's permissions, a checkpoint, a scope fence, an evidence block for completion claims, rules hygiene, and a living reference document. Optional hooks add enforcement in Claude Code.",
   "author": {
     "name": "CatCorner22"
   },

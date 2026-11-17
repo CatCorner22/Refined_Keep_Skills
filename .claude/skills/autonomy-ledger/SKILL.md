@@ -3,7 +3,7 @@ name: autonomy-ledger
 description: "Record each permission, limit, stop condition and acceptance criterion the user gives, in the user's words, and check that record before asking a permission question. Use when the user says you can, go ahead, do not ask, never, stop if or done means, or when about to ask whether you may do something."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" ledger *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" reinject *)'
 ---
 # Autonomy ledger

@@ -3,7 +3,7 @@ name: ask-or-assume
 description: "Decide whether to ask the user or proceed on a labelled assumption when a request leaves the goal, an input or a constraint open. Use when a task is ambiguous at the start, when a choice is expensive to undo, or when about to interrupt the user with a question in the middle of the work."
 compatibility: "Instruction-only skill. Works in claude.ai, Claude Code and the Skills API."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 # Ask or assume
 

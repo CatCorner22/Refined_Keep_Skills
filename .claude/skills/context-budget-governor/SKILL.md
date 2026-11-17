@@ -3,7 +3,7 @@ name: context-budget-governor
 description: "Write a checkpoint of the goal, decisions, finished work and next step before compaction decides what to drop, so that a compacted or new conversation restarts from your own notes. Use at session start, in a long session, before a large read or a long test run, or when the host says the context is filling up."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" checkpoint *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" reinject *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" trim *)'
 ---
 # Context budget governor

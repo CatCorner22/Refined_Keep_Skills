@@ -1,0 +1,10 @@
+{
+  "name": "verified-build-loop",
+  "version": "2.0.0",
+  "description": "An enforced build loop for Claude Code. The skill installs 4 project hooks: a plan gate that requires acceptance checks, a lint check after each edit, a Stop hook that blocks the end of a turn while a check fails, and protection of tests against weakening. It also installs a read-only reviewer subagent.",
+  "author": {
+    "name": "CatCorner22"
+  },
+  "repository": "https://github.com/CatCorner22/Refined_Keep_Skills",
+  "keywords": ["testing", "hooks", "verification", "quality", "code-review"]
+}

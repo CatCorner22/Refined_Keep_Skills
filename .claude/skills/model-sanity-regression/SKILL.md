@@ -3,7 +3,7 @@ name: model-sanity-regression
 description: "Run a fixed personal regression set against a model and record dated results, to tell a change in the model from a change in your own prompts and rules. Use when the model feels off, after a vendor update, or before you rely on a new model for real work."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" regress *)'
 ---
 # Model sanity regression

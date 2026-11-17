@@ -18,6 +18,7 @@ Sub-commands:
   fence-check COMMAND...                        exit 0 ALLOW, 1 BLOCK
   fetch-check COMMAND...                        exit 0 ALLOW, 1 BLOCK
   gate [TEXT...] [--file PATH] [--lenient]      exit 0 PASS, 1 blocked
+  review [TEXT...] [--file PATH] [--plan]       exit 0 PASS, 1 blocked
   trim FILE|-
   provenance add SECTION SOURCE [--quote Q] [--confidence C] | show [SECTION] | audit FILE
   rules lint [ROOT] | rewrite FILE | compile [ROOT] [--script-path P]
@@ -56,6 +57,10 @@ HOOKS = {
     "log": ("ad_guards", "hook_post_tool"),
     "log-failure": ("ad_gates", "hook_log_failure"),
     "completion-gate": ("ad_gates", "hook_completion_gate"),
+    "review-gate": ("ad_gates", "hook_review_gate"),
+    "stop": ("ad_gates", "hook_stop"),
+    "pre-plan": ("ad_gates", "hook_pre_plan"),
+    "review-reminder": ("ad_gates", "hook_review_reminder"),
 }
 # Version 1 hook names, kept so that an old hooks file keeps working.
 LEGACY_HOOKS = {
@@ -304,6 +309,25 @@ def cmd_gate(args):
     return EXIT_OK
 
 
+def cmd_review(args):
+    """Run the review gate on a message; exit 0 PASS, 1 blocked."""
+    if args.file:
+        with open(args.file, encoding="utf-8", errors="replace") as handle:
+            message = handle.read()
+    elif args.text:
+        message = " ".join(args.text)
+    else:
+        message = _module("ad_core").read_stdin_text()
+    if not message.strip():
+        raise ValueError("no message given: pass TEXT, --file PATH, or pipe the message on stdin")
+    reason = _module("ad_gates").review_gate_decide(message, kind="plan" if args.plan else "reply", note="")
+    if reason:
+        _out(reason)
+        return EXIT_NO
+    _out("PASS")
+    return EXIT_OK
+
+
 def cmd_trim(args):
     """Print a trimmed view of a file or of stdin. Stores nothing."""
     ad_gates = _module("ad_gates")
@@ -486,6 +510,12 @@ def build_parser():
     gate.add_argument("--file", default=None, metavar="PATH", help="read the message from a file")
     gate.add_argument("--lenient", action="store_true", help="skip the tool-log check of the Command line")
     gate.set_defaults(handler=cmd_gate)
+
+    review = commands.add_parser("review", help="check a reply or a plan for its review record")
+    review.add_argument("text", nargs="*", metavar="TEXT")
+    review.add_argument("--file", default=None, metavar="PATH", help="read the message from a file")
+    review.add_argument("--plan", action="store_true", help="the message is a plan, not a reply")
+    review.set_defaults(handler=cmd_review)
 
     trim = commands.add_parser("trim", help="print a trimmed view of long output")
     trim.add_argument("file", metavar="FILE", help="a file, or - for stdin")

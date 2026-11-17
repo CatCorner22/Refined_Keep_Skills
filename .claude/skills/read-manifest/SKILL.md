@@ -3,7 +3,7 @@ name: read-manifest
 description: "Keep an on-disk record of every file read or fetched, with line ranges and a summary, so an unchanged file is answered from the record instead of being opened again. Use when about to open a file a second time, after compaction or resume, or in a session that reads many files."
 compatibility: "Works in claude.ai, Claude Code and the Skills API. The bundled CLI needs Python 3.8 or later (standard library only). Enforcement hooks are optional and exist only in the Claude Code plugin form."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 allowed-tools: 'Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" manifest *) Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/ad.py" reinject *)'
 ---
 # Read manifest

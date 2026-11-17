@@ -1,6 +1,6 @@
 {
   "name": "refined-keep-skills",
-  "description": "The agent-discipline plugin: 17 skills plus optional enforcement hooks.",
+  "description": "3 plugins for Claude Code: the agent-discipline skills with optional enforcement hooks, the verified build loop, and Chicken Little Overwatch (quality control, plain language and red team).",
   "owner": {
     "name": "CatCorner22"
   },
@@ -8,7 +8,17 @@
     {
       "name": "agent-discipline",
       "source": "./",
-      "description": "17 agent-discipline skills with optional enforcement hooks for Claude Code."
+      "description": "18 agent-discipline skills with optional enforcement hooks for Claude Code."
+    },
+    {
+      "name": "verified-build-loop",
+      "source": "./verified-build-loop/plugin",
+      "description": "An enforced build loop: a plan gate, a lint check after each edit, a Stop hook that blocks while a check fails, protected tests, and a read-only reviewer."
+    },
+    {
+      "name": "chicken-little-overwatch",
+      "source": "./chicken-little-overwatch/chicken-little-overwatch",
+      "description": "Quality control, plain-language rewrite, and red-team swarm for LLM-assisted work."
     }
   ]
 }

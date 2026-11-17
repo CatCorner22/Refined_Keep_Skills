@@ -885,7 +885,7 @@ class ShippedFiles(Base):
         keys = re.findall(r'^([A-Za-z-]+):', front, flags=re.M)
         self.assertEqual(keys, ['name', 'description', 'compatibility', 'metadata', 'allowed-tools'])
         self.assertIn('name: living-reference\n', front)
-        self.assertIn('metadata:\n  version: "2.0.0"\n', front)
+        self.assertIn('metadata:\n  version: "2.1.0"\n', front)
         description = re.search(r'^description: "(.*)"$', front, flags=re.M).group(1)
         self.assertGreaterEqual(len(description), 200)
         self.assertLessEqual(len(description), 400)

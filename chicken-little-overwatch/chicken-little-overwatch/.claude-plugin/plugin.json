@@ -1,0 +1,10 @@
+{
+  "name": "chicken-little-overwatch",
+  "version": "2.0.0",
+  "description": "Quality control and red team for LLM-assisted work: requirement, evidence, and behavior checks; an active-voice and plain-language writing standard (Ken Adams style, R1-R30 rubric); and an adversarial swarm of 8 read-only subagents, with a Defender, that hunts present defects and future design problems.",
+  "author": {
+    "name": "CatCorner22"
+  },
+  "repository": "https://github.com/CatCorner22/Refined_Keep_Skills",
+  "keywords": ["quality-control", "red-team", "plain-language", "active-voice", "review"]
+}

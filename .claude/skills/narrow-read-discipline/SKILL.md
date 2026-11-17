@@ -3,7 +3,7 @@ name: narrow-read-discipline
 description: "Read the smallest part of a file, log or tool output that answers the question: search first, then read a line range, and run the impacted tests before the full suite. Use when opening a large file, reading logs, paging through long output, or running tests after an edit."
 compatibility: "Instruction-only skill. Works in claude.ai, Claude Code and the Skills API."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 # Narrow-read discipline
 

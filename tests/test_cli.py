@@ -81,7 +81,7 @@ class CliCase(unittest.TestCase):
 
 class BasicsTests(CliCase):
     def test_version(self):
-        self.assertEqual(self.ok("version"), "agent-discipline 2.0.0\n")
+        self.assertEqual(self.ok("version"), "agent-discipline 2.1.0\n")
 
     def test_usage_errors_exit_2_without_traceback(self):
         for args in ([], ["bogus"], ["manifest"], ["manifest", "check"], ["ledger", "add"],
