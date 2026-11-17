@@ -784,7 +784,8 @@ class RealManifestTests(unittest.TestCase):
     def test_every_marketplace_entry_points_at_a_plugin_with_the_same_name(self):
         marketplace = self.load(".claude-plugin", "marketplace.json")
         names = [entry["name"] for entry in marketplace["plugins"]]
-        self.assertEqual(names, ["agent-discipline", "verified-build-loop", "chicken-little-overwatch"])
+        self.assertEqual(names, ["agent-discipline", "verified-build-loop", "chicken-little-overwatch",
+                                 "coding", "plain-language", "red-team"])
         for entry in marketplace["plugins"]:
             self.assertTrue(entry["source"].startswith("./"), entry["source"])
             self.assertNotIn("..", entry["source"])

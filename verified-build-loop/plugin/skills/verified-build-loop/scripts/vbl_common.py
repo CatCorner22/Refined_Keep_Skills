@@ -7,18 +7,22 @@ The hooks read two files in the project:
   .claude/verify.json       the check configuration (Claude may add a check or a protected path, nothing else)
   .claude/verify-lock.json  the integrity record (only the Stop hook and the user write it)
 
-User-only commands (run these yourself in a terminal; the PreToolUse hook blocks Claude from running them):
-  python3 .claude/hooks/vbl_common.py unlock <path>   stop protecting one file
+User-only commands. Run these yourself in a terminal, in the project root. They refuse to run
+without a terminal on their input, and the PreToolUse hook blocks Claude from running them:
+  python3 .claude/hooks/vbl_common.py unlock <path>   stop protecting one entry of the "protected" list
   python3 .claude/hooks/vbl_common.py relock          accept the current state of every protected file
 """
 
 import fnmatch
 import hashlib
 import json
+import math
 import os
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import traceback
 
 CONFIG_REL = ".claude/verify.json"
@@ -33,7 +37,9 @@ ALWAYS_PROTECTED = [
 ]
 
 OUTPUT_TAIL_LINES = 150
+OUTPUT_TAIL_BYTES = 400000
 DEFAULT_TIMEOUT_SECONDS = 600
+MAX_TIMEOUT_SECONDS = 86400
 KILL_WAIT_SECONDS = 5
 # Settings in verify.json that only the user may change. A missing key counts as its default.
 USER_ONLY_SETTINGS = {
@@ -48,18 +54,16 @@ USER_ONLY_SETTINGS = {
 # ---------------------------------------------------------------------------
 
 def project_dir(hook_input=None):
-    """Return the absolute project root."""
+    """Return the project root as a real path (symbolic links resolved)."""
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     if not root and hook_input:
         root = hook_input.get("cwd")
-    return os.path.abspath(root or os.getcwd())
+    if not isinstance(root, str) or not root:
+        root = os.getcwd()
+    return os.path.realpath(root)
 
 
-def rel_path(root, path):
-    """Return path relative to root with forward slashes, or None if outside root."""
-    if not path:
-        return None
-    absolute = os.path.abspath(path if os.path.isabs(path) else os.path.join(root, path))
+def _inside(root, absolute):
     try:
         relative = os.path.relpath(absolute, root)
     except ValueError:  # different drive on Windows
@@ -69,11 +73,41 @@ def rel_path(root, path):
     return relative.replace(os.sep, "/")
 
 
+def lexical_rel(root, path):
+    """Return path relative to root with forward slashes, as written, or None if it lies outside root."""
+    if not isinstance(path, str) or not path:
+        return None
+    return _inside(root, os.path.abspath(path if os.path.isabs(path) else os.path.join(root, path)))
+
+
+def rel_paths(root, path):
+    """Return every relative form of path that lies inside root: with symbolic links resolved, and
+    as written. Protection applies when any form matches, so another name for a protected file
+    (a link to the project folder, a link to the file) does not get past it."""
+    if not isinstance(path, str) or not path or "\0" in path:
+        return []
+    joined = path if os.path.isabs(path) else os.path.join(root, path)
+    forms = []
+    for absolute in (os.path.realpath(joined), os.path.abspath(joined)):
+        relative = _inside(root, absolute)
+        if relative is not None and relative not in forms:
+            forms.append(relative)
+    return forms
+
+
+def rel_path(root, path):
+    """Return the first relative form of path inside root (links resolved first), or None."""
+    forms = rel_paths(root, path)
+    return forms[0] if forms else None
+
+
 def matches_any(relative, patterns):
     """True if relative matches a pattern. A pattern ending in '/' covers that whole folder.
-    In fnmatch, '*' also matches '/', so 'tests/*' covers nested folders."""
+    In fnmatch, '*' also matches '/', so 'tests/*' covers nested folders. Letter case is ignored,
+    because some file systems treat 'Tests/a.py' and 'tests/a.py' as one file."""
+    relative = relative.lower()
     for pattern in patterns:
-        pattern = pattern.replace("\\", "/")
+        pattern = pattern.replace("\\", "/").lower()
         if pattern.startswith("./"):
             pattern = pattern[2:]
         if pattern.endswith("/"):
@@ -84,11 +118,18 @@ def matches_any(relative, patterns):
     return False
 
 
+def is_set_up(root):
+    """True when the project uses the loop: verify.json exists, or the lock does."""
+    return (os.path.lexists(os.path.join(root, *CONFIG_REL.split("/")))
+            or os.path.lexists(os.path.join(root, *LOCK_REL.split("/"))))
+
+
 # ---------------------------------------------------------------------------
 # Files
 # ---------------------------------------------------------------------------
 
 def read_text(path):
+    """Return the text of a file, or None when the file does not exist."""
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return handle.read()
@@ -97,13 +138,18 @@ def read_text(path):
 
 
 def load_json_file(path):
-    """Return (data, error). data is None when the file does not exist."""
-    text = read_text(path)
+    """Return (data, error). data and error are both None when the file does not exist."""
+    try:
+        text = read_text(path)
+    except (OSError, ValueError) as exc:  # a folder in its place, no permission, text that is not UTF-8
+        return None, "{} cannot be read: {}".format(path, exc)
     if text is None:
         return None, None
     try:
         return json.loads(text), None
-    except json.JSONDecodeError as exc:
+    except RecursionError:
+        return None, "{} is not valid JSON: it is nested too deeply".format(path)
+    except ValueError as exc:
         return None, "{} is not valid JSON: {}".format(path, exc)
 
 
@@ -116,13 +162,28 @@ def write_json_file(path, data):
     os.replace(temp_path, path)
 
 
+def file_kind(path):
+    """Return 'file' for a regular file, 'missing', or 'other' (a folder, a pipe, a socket, a
+    file that cannot be examined). A symbolic link counts as what it points to."""
+    try:
+        mode = os.stat(path).st_mode
+    except FileNotFoundError:
+        return "missing"
+    except OSError:
+        return "other"
+    return "file" if stat.S_ISREG(mode) else "other"
+
+
 def sha256_file(path):
+    """Return the SHA-256 of a regular file, or None when path is not a regular file that can be read."""
+    if file_kind(path) != "file":
+        return None
     digest = hashlib.sha256()
     try:
         with open(path, "rb") as handle:
             for block in iter(lambda: handle.read(65536), b""):
                 digest.update(block)
-    except FileNotFoundError:
+    except OSError:
         return None
     return digest.hexdigest()
 
@@ -134,6 +195,18 @@ def load_config(root):
 
 def _text_list(value):
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _valid_timeout(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and 0 < value <= MAX_TIMEOUT_SECONDS)
+
+
+def _valid_command(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+TIMEOUT_RULE = "'timeout_seconds' must be a number above 0 and at most {}".format(MAX_TIMEOUT_SECONDS)
 
 
 def config_shape_problems(config):
@@ -153,10 +226,12 @@ def config_shape_problems(config):
                 continue
             if not isinstance(check.get("name"), str) or not check.get("name"):
                 problems.append("{} needs a 'name'".format(label))
-            if not isinstance(check.get("command"), str) or not check.get("command").strip():
+            if not _valid_command(check.get("command")):
                 problems.append("{} needs a 'command'".format(label))
+            elif "\0" in check["command"]:
+                problems.append("{}: 'command' holds a NUL character".format(label))
             if not _valid_timeout(check.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)):
-                problems.append("{}: 'timeout_seconds' must be a number above 0".format(label))
+                problems.append("{}: {}".format(label, TIMEOUT_RULE))
     for key in ("protected", "fingerprint_exclude"):
         if not _text_list(config.get(key, [])):
             problems.append("'{}' must be a list of paths".format(key))
@@ -166,17 +241,13 @@ def config_shape_problems(config):
         problems.append("'plan_gate' must be true or false")
     lint = config.get("lint_on_edit")
     if lint is not None:
-        if not isinstance(lint, dict) or not isinstance(lint.get("command"), str):
+        if not isinstance(lint, dict) or not isinstance(lint.get("command"), str) or "\0" in lint["command"]:
             problems.append("'lint_on_edit' must be an object with a 'command'")
         elif not _text_list(lint.get("extensions", [])):
             problems.append("'lint_on_edit' 'extensions' must be a list such as [\".py\"]")
         elif not _valid_timeout(lint.get("timeout_seconds", 120)):
-            problems.append("'lint_on_edit': 'timeout_seconds' must be a number above 0")
+            problems.append("'lint_on_edit': {}".format(TIMEOUT_RULE))
     return problems
-
-
-def _valid_timeout(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
 
 
 def load_usable_config(root):
@@ -192,13 +263,14 @@ def load_usable_config(root):
 
 def protected_patterns(config):
     patterns = list(ALWAYS_PROTECTED)
-    if config:
+    if isinstance(config, dict) and _text_list(config.get("protected", [])):
         patterns.extend(config.get("protected", []))
     return patterns
 
 
 def feature_list_rel(config):
-    return (config or {}).get("feature_list", "feature_list.json")
+    value = config.get("feature_list") if isinstance(config, dict) else None
+    return value if isinstance(value, str) and value else "feature_list.json"
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +287,8 @@ def _features_by_id(data):
             return None, "every feature needs an 'id' that is a non-empty string"
         if feature["id"] in by_id:
             return None, "feature id {} appears twice".format(feature["id"])
+        if "passes" in feature and not isinstance(feature["passes"], bool):
+            return None, "feature {}: 'passes' must be true or false".format(feature["id"])
         by_id[feature["id"]] = feature
     return by_id, None
 
@@ -246,7 +320,7 @@ def feature_list_violations(old_data, new_data):
 
 
 def _checks_by_name(config, key):
-    checks = (config or {}).get(key, [])
+    checks = config.get(key, []) if isinstance(config, dict) else []
     if not isinstance(checks, list):
         return {}
     return {check.get("name"): check for check in checks if isinstance(check, dict)}
@@ -289,33 +363,53 @@ def tail(text, lines=OUTPUT_TAIL_LINES):
     return "[... {} earlier lines cut ...]\n".format(len(parts) - lines) + "\n".join(parts[-lines:])
 
 
-def run_check(root, check):
-    """Run one check. Return (passed, report_text)."""
+def _output_tail(handle):
+    """Return the end of a command's captured output as text. A stray byte must not crash the hook."""
+    try:
+        size = handle.seek(0, os.SEEK_END)
+        handle.seek(max(size - OUTPUT_TAIL_BYTES, 0))
+        return tail(handle.read().decode("utf-8", "replace"))
+    except (OSError, ValueError):
+        return "(the output could not be read)"
+
+
+def run_check(root, check, time_limit=None):
+    """Run one check. Return (passed, report_text).
+
+    ``time_limit`` is the number of seconds that the caller has left; it caps the check's own timeout.
+    The command's output goes to a temporary file, not a pipe, so a command that leaves a background
+    process behind still ends when its shell ends. A new session gives the command its own process
+    group, so a timeout can stop every process that the command started.
+    """
     name = check.get("name", "unnamed check")
     command = check.get("command")
-    if not command:
+    if not _valid_command(command):
         return False, "Check '{}' has no command.".format(name)
     timeout = check.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
     if not _valid_timeout(timeout):
-        return False, "Check '{}' has a 'timeout_seconds' that is not a number above 0.".format(name)
-    try:
-        # A new session gives the command its own process group, so a timeout can stop every process
-        # that the command started. Output is decoded leniently: a stray byte must not crash the hook.
-        process = subprocess.Popen(
-            command, shell=True, cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, start_new_session=(os.name == "posix"),
-        )
-    except OSError as exc:
-        return False, "Check '{}' could not start: {}\n{}".format(name, command, exc)
-    try:
-        raw, _ = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _kill_group(process)
-        return False, "Check '{}' timed out after {:g} seconds: {}".format(name, timeout, command)
-    if process.returncode == 0:
-        return True, ""
-    output = tail((raw or b"").decode("utf-8", "replace"))
-    return False, "Check '{}' failed (exit {}): {}\n{}".format(name, process.returncode, command, output)
+        return False, "Check '{}': {}.".format(name, TIMEOUT_RULE)
+    capped = time_limit is not None and time_limit < timeout
+    if capped:
+        timeout = max(time_limit, 0.1)
+    with tempfile.TemporaryFile() as output:
+        try:
+            process = subprocess.Popen(
+                command, shell=True, cwd=root, stdin=subprocess.DEVNULL, stdout=output,
+                stderr=subprocess.STDOUT, start_new_session=(os.name == "posix"),
+            )
+        except (OSError, ValueError) as exc:
+            return False, "Check '{}' could not start: {}\n{}".format(name, command, exc)
+        try:
+            code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(process)
+            if capped:
+                return False, ("Check '{}' did not finish within the Stop hook's time budget "
+                               "({:.0f} seconds were left): {}".format(name, timeout, command))
+            return False, "Check '{}' timed out after {:g} seconds: {}".format(name, timeout, command)
+        if code == 0:
+            return True, ""
+        return False, "Check '{}' failed (exit {}): {}\n{}".format(name, code, command, _output_tail(output))
 
 
 def _kill_group(process):
@@ -328,8 +422,8 @@ def _kill_group(process):
     except OSError:
         pass
     try:
-        process.communicate(timeout=KILL_WAIT_SECONDS)
-    except (subprocess.TimeoutExpired, OSError, ValueError):
+        process.wait(timeout=KILL_WAIT_SECONDS)
+    except (subprocess.TimeoutExpired, OSError):
         pass
 
 
@@ -340,23 +434,27 @@ def _kill_group(process):
 def read_hook_input():
     try:
         data = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
+    except (ValueError, RecursionError):
         return {}
     return data if isinstance(data, dict) else {}
 
 
 def block(message):
     """Exit code 2: Claude Code shows stderr to Claude and blocks the action or the stop."""
-    sys.stderr.write(message.rstrip() + "\n")
+    text = message.rstrip() + "\n"
+    try:
+        sys.stderr.write(text)
+    except UnicodeError:
+        sys.stderr.write(text.encode("ascii", "backslashreplace").decode("ascii"))
     sys.exit(2)
 
 
 def run_stop_hook(main, hook_input):
     """Run the Stop hook's main(hook_input) and return its exit code.
 
-    An internal error must not pass in silence, because Claude Code treats a crashed hook as a
-    non-blocking error and lets the turn end unchecked. On the first attempt the error blocks, so
-    Claude reads it and tells the user. On a continued attempt the turn ends and the user gets a message.
+    An internal error blocks, on every attempt. Claude Code treats a crashed hook as a non-blocking
+    error, so without this a crash would let the turn end unchecked. The block cannot trap a
+    session: Claude Code itself ends a turn after 8 consecutive blocks.
     """
     try:
         return main(hook_input)
@@ -365,18 +463,21 @@ def run_stop_hook(main, hook_input):
     except Exception as exc:  # noqa: BLE001 - every internal error takes the same route
         detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
         where = traceback.format_exc(limit=-2)
-        text = ("verified-build-loop: the Stop hook failed internally, so the checks did not run.\n"
-                "{}\nTell the user this, and do not say that the work is verified. "
-                "Run the checks by hand, and see Phase 3 (Repair) of the skill.".format(detail))
-        if hook_input.get("stop_hook_active"):
-            print(json.dumps({"systemMessage": text}))
-            return 0
-        block(text + "\n" + where)
+        block("verified-build-loop: the Stop hook failed internally, so the checks did not run.\n"
+              "{}\n{}\nTell the user this in plain words, and do not say that the work is verified. "
+              "Run the checks by hand, and see Phase 3 (Repair) of the skill.".format(detail, where))
 
 
 # ---------------------------------------------------------------------------
 # User-only commands
 # ---------------------------------------------------------------------------
+
+def _has_terminal():
+    try:
+        return sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        return False
+
 
 def _user_unlock(root, target):
     config, error = load_config(root)
@@ -386,7 +487,7 @@ def _user_unlock(root, target):
     if not isinstance(config, dict) or not _text_list(config.get("protected", [])):
         print("{} is malformed; fix its 'protected' list first.".format(CONFIG_REL))
         return 1
-    relative = rel_path(root, target) or target
+    relative = lexical_rel(root, target) or target
     if relative not in config.get("protected", []):
         print("'{}' is not in the 'protected' list. The list holds: {}".format(
             relative, ", ".join(config.get("protected", [])) or "nothing"))
@@ -404,7 +505,7 @@ def _user_unlock(root, target):
 
 def _user_relock(root):
     lock_path = os.path.join(root, LOCK_REL)
-    if os.path.exists(lock_path):
+    if os.path.lexists(lock_path):
         os.remove(lock_path)
     print("Removed the lock. The next Stop hook run records the current state of every protected file.")
     return 0
@@ -412,9 +513,14 @@ def _user_relock(root):
 
 def main(argv):
     root = project_dir()
-    if len(argv) == 3 and argv[1] == "unlock":
+    command = argv[1] if len(argv) > 1 else ""
+    if command in ("unlock", "relock") and not _has_terminal():
+        print("unlock and relock are user-only commands. They need a terminal on their input: "
+              "run the command yourself in a terminal, in the project root.")
+        return 1
+    if len(argv) == 3 and command == "unlock":
         return _user_unlock(root, argv[2])
-    if len(argv) == 2 and argv[1] == "relock":
+    if len(argv) == 2 and command == "relock":
         return _user_relock(root)
     print(__doc__)
     return 1

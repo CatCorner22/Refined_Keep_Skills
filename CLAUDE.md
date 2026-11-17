@@ -30,5 +30,5 @@ This repository uses verified-build-loop (quick setup). Hooks enforce the checks
 - Finish with a commit and an evidence report: each acceptance check, the command you ran, and its output. State what you did not verify.
 - Never weaken a check. Never change a protected file or a check in `.claude/verify.json`. If one is wrong, stop and ask the user.
 - Protected tests: none. New tests stay editable until the user asks to protect them.
-- The fast checks are the 5 commands in `.claude/verify.json`. The lint check parses each edited `.py` file.
+- The fast checks are the commands in `.claude/verify.json`. The lint check parses each edited `.py` file.
 - The files under `.claude/hooks/` are copies of the scripts in `verified-build-loop/plugin/skills/verified-build-loop/scripts/`. Only the user can replace them; `verified-build-loop/README.md`, section 5, gives the 2 commands.
