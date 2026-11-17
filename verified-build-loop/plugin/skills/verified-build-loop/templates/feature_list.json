@@ -1,0 +1,14 @@
+{
+  "features": [
+    {
+      "id": "F001",
+      "description": "One sentence that states what the user can do when this feature works.",
+      "spec_section": "SPEC.md section 2.1",
+      "steps": [
+        "First thing a person does to test the feature end to end",
+        "What the person sees when the feature works"
+      ],
+      "passes": false
+    }
+  ]
+}

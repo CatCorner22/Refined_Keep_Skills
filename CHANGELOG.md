@@ -2,6 +2,18 @@
 
 This file lists the changes that a user of the skills can notice. The format follows "Keep a Changelog". Version numbers are the `version` in `.claude-plugin/plugin.json`, the `VERSION` in `lib/ad_core.py` and the `metadata.version` in every `SKILL.md`.
 
+## Repository changes - 2026-11-17
+
+The version of the 18 skills stays 2.1.0: no skill and no file in `lib/` changed.
+
+### Added
+
+- `verified-build-loop/`: the verified build loop, version 2.0.0, as a Claude Code plugin with 1 skill, 5 hook scripts, 102 tests and 2 upload zips. `verified-build-loop/README.md` lists what changed from version 1.
+- `plugins/`: 3 Claude Code plugins, `coding` 2.0.0, `plain-language` 1.0.0 and `red-team` 1.0.0, with a build script, 22 tests and upload zips. `plugins/README.md` lists what each build changes and 5 open points for the owner.
+- `.claude-plugin/marketplace.json` now lists 6 plugins: `agent-discipline`, `verified-build-loop`, `chicken-little-overwatch`, `coding`, `plain-language` and `red-team`.
+- This repository now uses its own tools: `.claude/settings.json` (the hooks of README section 8 plus the 4 hooks of the verified build loop), `.claude/hooks/`, `.claude/agents/reviewer.md` and `.claude/verify.json`. `tests/test_project_setup.py` keeps the installed copies equal to their sources.
+- `CLAUDE.md` has a "Verified build loop" section with the working rules.
+
 ## [2.1.0] - 2026-11-13
 
 ### Added

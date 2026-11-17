@@ -1,0 +1,15 @@
+{
+  "name": "red-team",
+  "version": "1.0.0",
+  "description": "red-team-lead: lead an adversarial campaign against something that the user owns or is authorized to test (a plan, a prompt, an agent, a codebase, a brief), with independent attacker lanes, a separate judge, and findings that are logged by severity, owned and retested.",
+  "author": {
+    "name": "CatCorner22"
+  },
+  "repository": "https://github.com/CatCorner22/Refined_Keep_Skills",
+  "keywords": [
+    "red-team",
+    "adversarial-review",
+    "pre-mortem",
+    "quality"
+  ]
+}

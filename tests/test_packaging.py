@@ -768,18 +768,31 @@ class RealManifestTests(unittest.TestCase):
         manifest = self.load(".claude-plugin", "plugin.json")
         self.assertIn("%d skills" % len(load_build().ALL_SKILLS), manifest["description"])
 
-    def test_marketplace_has_required_fields_and_one_matching_entry(self):
+    def test_marketplace_has_required_fields_and_a_matching_first_entry(self):
         manifest = self.load(".claude-plugin", "plugin.json")
         marketplace = self.load(".claude-plugin", "marketplace.json")
         self.assertTrue(re.match(r"^[a-z0-9]+(-[a-z0-9]+)*$", marketplace["name"]))
         self.assertTrue(marketplace["owner"]["name"].strip())
-        self.assertEqual(len(marketplace["plugins"]), 1)
         entry = marketplace["plugins"][0]
         self.assertEqual(entry["name"], manifest["name"])
         self.assertEqual(entry["source"], "./")
-        self.assertNotIn("version", entry)
         self.assertEqual(sorted(set(marketplace) - {"name", "description", "owner", "plugins"}), [])
-        self.assertEqual(sorted(set(entry) - {"name", "source", "description"}), [])
+        for entry in marketplace["plugins"]:
+            self.assertNotIn("version", entry)
+            self.assertEqual(sorted(set(entry) - {"name", "source", "description"}), [])
+
+    def test_every_marketplace_entry_points_at_a_plugin_with_the_same_name(self):
+        marketplace = self.load(".claude-plugin", "marketplace.json")
+        names = [entry["name"] for entry in marketplace["plugins"]]
+        self.assertEqual(names, ["agent-discipline", "verified-build-loop", "chicken-little-overwatch",
+                                 "coding", "plain-language", "red-team"])
+        for entry in marketplace["plugins"]:
+            self.assertTrue(entry["source"].startswith("./"), entry["source"])
+            self.assertNotIn("..", entry["source"])
+            folder = os.path.normpath(os.path.join(REPO, entry["source"]))
+            with open(os.path.join(folder, ".claude-plugin", "plugin.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["name"], entry["name"])
+            self.assertTrue(os.path.isdir(os.path.join(folder, "skills")) or entry["source"] == "./")
 
     def test_repository_has_no_top_level_bin_directory(self):
         self.assertFalse(os.path.exists(os.path.join(REPO, "bin")))
@@ -995,6 +1008,13 @@ class RealRepositoryFilesTests(unittest.TestCase):
         self.assertIn("## [%s]" % manifest["version"], text)
 
     def test_tests_leave_no_state_directory_in_the_repository(self):
+        # Since 2026-11-17 this repository runs its own hooks (.claude/settings.json), and those hooks
+        # keep their state in .agent/. The directory is therefore expected while the hooks are on.
+        # With the hooks off, only a test that forgot AGENT_STATE_DIR can have created it.
+        if os.path.isfile(os.path.join(REPO, ".claude", "settings.json")):
+            ignored = subprocess.run(["git", "check-ignore", "-q", ".agent"], cwd=REPO)
+            self.assertEqual(ignored.returncode, 0, ".agent/ must stay ignored by git")
+            return
         self.assertFalse(os.path.exists(os.path.join(REPO, ".agent")))
 
 

@@ -1,0 +1,16 @@
+{
+  "name": "plain-language",
+  "version": "1.0.0",
+  "description": "Two writing skills in the Ken Adams (MSCD) tradition: unambiguous-language (active voice, 'might' for possibility, and a living list of ambiguous words with a precise replacement for each) and one-way-optimal-language (medical, pharmacy and research text that a reader uses with no chance to ask a question), with a bundled active-voice checker.",
+  "author": {
+    "name": "CatCorner22"
+  },
+  "repository": "https://github.com/CatCorner22/Refined_Keep_Skills",
+  "keywords": [
+    "plain-language",
+    "active-voice",
+    "writing",
+    "mscd",
+    "medical-writing"
+  ]
+}
