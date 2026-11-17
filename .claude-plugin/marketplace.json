@@ -1,6 +1,6 @@
 {
   "name": "refined-keep-skills",
-  "description": "3 plugins for Claude Code: the agent-discipline skills with optional enforcement hooks, the verified build loop, and Chicken Little Overwatch (quality control, plain language and red team).",
+  "description": "6 plugins for Claude Code: the agent-discipline skills with optional enforcement hooks, the verified build loop, Chicken Little Overwatch (quality control, plain language and red team), and Claude Code builds of the owner's coding, plain-language and red-team skills.",
   "owner": {
     "name": "CatCorner22"
   },
@@ -19,6 +19,21 @@
       "name": "chicken-little-overwatch",
       "source": "./chicken-little-overwatch/chicken-little-overwatch",
       "description": "Quality control, plain-language rewrite, and red-team swarm for LLM-assisted work."
+    },
+    {
+      "name": "coding",
+      "source": "./plugins/coding",
+      "description": "7 stack-agnostic software-craft skills: deliverable first, stable architecture, real-time testing, clean minimal code, UI and UX engineering."
+    },
+    {
+      "name": "plain-language",
+      "source": "./plugins/plain-language",
+      "description": "unambiguous-language and one-way-optimal-language: Ken Adams (MSCD) style, active voice, and a bundled active-voice checker."
+    },
+    {
+      "name": "red-team",
+      "source": "./plugins/red-team",
+      "description": "red-team-lead: an adversarial campaign with independent attacker lanes, a separate judge, and findings that are owned and retested."
     }
   ]
 }

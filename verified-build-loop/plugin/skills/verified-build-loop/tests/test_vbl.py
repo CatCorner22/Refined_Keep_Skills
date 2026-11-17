@@ -163,6 +163,21 @@ class ProjectCase(unittest.TestCase):
     def edit_config(self, old, new):
         return self.file_tool("Edit", ".claude/verify.json", old_string=old, new_string=new)
 
+    def user_command(self, *args, tty=True):
+        """Run a user-only command of vbl_common.py, with or without a terminal on stdin."""
+        command = [sys.executable, "-B", self.path(".claude/hooks/vbl_common.py")] + list(args)
+        if not tty:
+            return subprocess.run(command, cwd=self.root, env=self.env, stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True)
+        import pty
+        master, slave = pty.openpty()
+        try:
+            return subprocess.run(command, cwd=self.root, env=self.env, stdin=slave,
+                                  capture_output=True, text=True)
+        finally:
+            os.close(master)
+            os.close(slave)
+
 
 class StopCheckTests(ProjectCase):
     def test_first_run_passes_and_creates_the_lock(self):
@@ -379,26 +394,22 @@ class IntegrityTests(ProjectCase):
 
     def test_unlock_and_relock(self):
         self.assert_stop_passes()
-        common = self.path(".claude/hooks/vbl_common.py")
-        result = subprocess.run([sys.executable, "-B", common, "unlock", "tests/test_calc.py"],
-                                cwd=self.root, env=self.env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.user_command("unlock", "tests/test_calc.py")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(self.read(".claude/verify.json"))["protected"], [])
         self.write("tests/test_calc.py", TEST_CODE + "# the user changed this\n")
         self.assert_stop_passes()
         with open(self.path(".claude/hooks/post_edit_lint.py"), "a") as handle:
             handle.write("# the user changed this\n")
         self.assert_stop_blocks("changed")
-        result = subprocess.run([sys.executable, "-B", common, "relock"],
-                                cwd=self.root, env=self.env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.user_command("relock")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assert_stop_passes()
 
 
 class UnlockTests(ProjectCase):
     def unlock(self, target):
-        return subprocess.run([sys.executable, "-B", self.path(".claude/hooks/vbl_common.py"), "unlock", target],
-                              cwd=self.root, env=self.env, capture_output=True, text=True)
+        return self.user_command("unlock", target)
 
     def test_unlocking_a_pattern_forgets_the_files_it_covered(self):
         self.config["protected"] = ["tests/*"]
@@ -457,10 +468,12 @@ class CrashGuardTests(unittest.TestCase):
         self.assertIn("did not run", err)
         self.assertIn("RuntimeError: boom", err)
 
-    def test_the_next_attempt_lets_the_turn_end_and_tells_the_user(self):
-        code, out, _err = self.call(active=True)
-        self.assertEqual(code, 0)
-        self.assertIn("did not run", json.loads(out)["systemMessage"])
+    def test_a_continued_attempt_blocks_too(self):
+        # A crashed hook must never let a turn end unchecked. Claude Code itself ends the turn
+        # after 8 consecutive blocks, so this cannot trap a session.
+        code, _out, err = self.call(active=True)
+        self.assertEqual(code, 2)
+        self.assertIn("did not run", err)
 
 
 class ProtectPathsTests(ProjectCase):
@@ -528,6 +541,11 @@ class ProtectPathsTests(ProjectCase):
             "git checkout main -- tests/test_calc.py",
             "git restore --source=HEAD~1 tests/test_calc.py",
             "git restore -s HEAD~1 tests/test_calc.py",
+            "git restore tests/test_calc.py",
+            "git checkout -- tests/test_calc.py",
+            "git restore {--source=HEAD~1,--worktree} tests/test_calc.py",
+            "git restore --source=HEAD~1 --staged --worktree -- tests/test_calc.py",
+            "git checkout HEAD~1 -- tests/test_calc.py",
             "git restore tests/test_calc.py && rm tests/test_calc.py",
             "git restore tests/test_calc.py; echo x > tests/test_calc.py",
             "git stash push tests/test_calc.py",
@@ -553,12 +571,12 @@ class ProtectPathsTests(ProjectCase):
                 self.assert_bash(command, blocked=False)
 
     def test_claude_can_restore_a_protected_file_to_its_committed_content(self):
+        # Only the 2 forms that take the content from the last commit. A plain "git restore PATH"
+        # takes it from the index, which can hold a staged change.
         for command in (
-            "git restore tests/test_calc.py",
-            "git restore -- tests/test_calc.py",
-            "git restore --worktree tests/test_calc.py",
-            "git checkout -- tests/test_calc.py",
             "git checkout HEAD -- tests/test_calc.py",
+            "git checkout HEAD -- tests/test_calc.py src/calc.py",
+            "git restore --source=HEAD --staged --worktree -- tests/test_calc.py",
         ):
             with self.subTest(command=command):
                 self.assert_bash(command, blocked=False)
@@ -648,6 +666,226 @@ class PlanGateTests(ProjectCase):
     def test_no_config_means_no_gate(self):
         os.remove(self.path(".claude/verify.json"))
         self.assertEqual(self.plan("# Plan\n1. Just do it.\n")[0], 0)
+
+
+class ReviewFindingTests(ProjectCase):
+    """Each test pins a defect that an independent review reproduced on 2026-11-17."""
+
+    def write_tool(self, relative, content="x"):
+        return self.file_tool("Write", relative, content=content)[0]
+
+    # -- hostile or broken input must block, on every attempt ---------------
+
+    def test_deeply_nested_json_blocks_on_every_attempt(self):
+        for relative in (".claude/verify.json", "feature_list.json"):
+            with self.subTest(file=relative):
+                original = self.read(relative)
+                self.write(relative, "[" * 100000)
+                self.assert_stop_blocks(relative, active=False)
+                self.assert_stop_blocks(relative, active=True)
+                self.assertEqual(self.write_tool(".claude/verify-lock.json"), 2)
+                self.write(relative, original)
+
+    def test_a_folder_in_place_of_the_feature_list_blocks(self):
+        os.remove(self.path("feature_list.json"))
+        os.mkdir(self.path("feature_list.json"))
+        self.assert_stop_blocks("feature_list.json", active=True)
+
+    def test_an_added_check_that_cannot_run_blocks(self):
+        good = json.dumps(self.config, indent=2)
+        cases = (
+            ('{"name": "nul", "command": "true\\u0000", "timeout_seconds": 5}', "NUL"),
+            ('{"name": "inf", "command": "true", "timeout_seconds": 1e999}', "'timeout_seconds'"),
+            ('{"name": "bad\\ud800name", "command": "exit 1", "timeout_seconds": 5}', "failed (exit 1)"),
+        )
+        for extra, expected in cases:
+            with self.subTest(check=extra):
+                self.write(".claude/verify.json", good.replace('"full_checks"', '"extra": 1, "full_checks"', 1)
+                           .replace('"fast_checks": [', '"fast_checks": [' + extra + ",", 1))
+                self.assert_stop_blocks(expected, active=True)
+
+    # -- a missing or unusable verify.json must not switch the hooks off ----
+
+    def test_a_removed_verify_json_blocks_and_keeps_the_hooks_protected(self):
+        self.assert_stop_passes()
+        os.remove(self.path(".claude/verify.json"))
+        self.write("src/calc.py", BAD_CODE)
+        self.assert_stop_blocks(".claude/verify.json is missing")
+        self.assert_stop_blocks(".claude/verify.json is missing", active=True)
+        for relative in (".claude/verify-lock.json", ".claude/hooks/stop_check.py", ".claude/settings.json"):
+            self.assertEqual(self.write_tool(relative), 2, relative)
+
+    def test_an_unusable_verify_json_keeps_the_hooks_protected_and_can_be_repaired(self):
+        self.write(".claude/verify.json", "[]")
+        for relative in (".claude/verify-lock.json", ".claude/hooks/stop_check.py", ".claude/settings.json"):
+            self.assertEqual(self.write_tool(relative), 2, relative)
+        self.assertEqual(self.write_tool(".claude/verify.json", json.dumps(self.config)), 0)
+
+    # -- other names for a protected path -----------------------------------
+
+    def test_a_symlink_alias_does_not_get_past_the_protection(self):
+        os.symlink(".", self.path("alias"))
+        for relative in ("alias/.claude/verify-lock.json", "alias/tests/test_calc.py",
+                         "alias/.claude/hooks/stop_check.py", "alias/.claude/verify-lock.json"):
+            self.assertEqual(self.write_tool(relative), 2, relative)
+        self.assert_bash("rm alias/tests/test_calc.py", blocked=True)
+
+    def test_a_project_dir_given_through_a_symlink_still_protects(self):
+        link = os.path.join(self.tmp, "link")
+        os.symlink(self.root, link)
+        env = dict(self.env, CLAUDE_PROJECT_DIR=link)
+        payload = {"tool_name": "Write", "cwd": link,
+                   "tool_input": {"file_path": self.path("tests/test_calc.py"), "content": "x"}}
+        self.assertEqual(self.hook("protect_paths.py", payload, env=env)[0], 2)
+
+    def test_protection_ignores_letter_case(self):
+        for relative in (".claude/Verify-lock.json", ".claude/HOOKS/stop_check.py", "Tests/Test_Calc.py"):
+            self.assertEqual(self.write_tool(relative), 2, relative)
+
+    def test_a_lock_without_snapshots_is_not_usable(self):
+        self.write(".claude/verify-lock.json", json.dumps({"hashes": {}}))
+        self.assert_stop_blocks("relock")
+
+    # -- what the Stop hook hashes ------------------------------------------
+
+    def test_a_protected_file_in_a_folder_named_build_is_hashed(self):
+        self.config["protected"] = ["tests/*"]
+        self.save_config()
+        self.write("tests/build/test_more.py", "x = 1\n")
+        self.commit("more")
+        self.assert_stop_passes()
+        self.write("tests/build/test_more.py", "x = 2\n")
+        self.assert_stop_blocks("protected file 'tests/build/test_more.py' changed")
+
+    def test_a_new_file_in_a_protected_folder_blocks(self):
+        self.config["protected"] = ["tests/*"]
+        self.save_config()
+        self.assert_stop_passes()
+        self.write("tests/conftest.py", "collect_ignore = ['test_calc.py']\n")
+        self.assert_stop_blocks("new file 'tests/conftest.py'")
+
+    def test_a_new_file_that_git_ignores_in_a_protected_folder_is_left_alone(self):
+        self.config["protected"] = ["tests/*"]
+        self.save_config()
+        self.assert_stop_passes()
+        self.write("tests/ignored/output.txt", "x\n")
+        self.write("tests/__pycache__/test_calc.cpython-313.pyc", "x\n")
+        self.assert_stop_passes()
+
+    def test_the_files_of_a_newly_protected_path_are_recorded_without_a_report(self):
+        self.assert_stop_passes()
+        self.write("tests/test_new.py", "x = 1\n")
+        self.config["protected"].append("tests/test_new.py")
+        self.save_config()
+        self.assert_stop_passes()
+        self.write("tests/test_new.py", "x = 2\n")
+        self.assert_stop_blocks("protected file 'tests/test_new.py' changed")
+
+    def test_a_fifo_in_a_protected_folder_does_not_hang_the_hook(self):
+        self.config["protected"] = ["tests/*"]
+        self.save_config()
+        self.assert_stop_passes()
+        os.mkfifo(self.path("tests/pipe"))
+        started = time.time()
+        self.assert_stop_blocks("tests/pipe")
+        self.assertLess(time.time() - started, 15)
+
+    def test_a_change_inside_a_nested_git_repository_reruns_the_checks(self):
+        self.write("vendor/lib.py", "x = 1\n")
+        subprocess.run(["git", "init", "-q", "."], cwd=self.path("vendor"), check=True)
+        self.assert_stop_passes()
+        self.assert_stop_passes()
+        self.assertEqual(self.runs(), 1)
+        self.write("vendor/lib.py", "x = 22\n")
+        self.assert_stop_passes()
+        self.assertEqual(self.runs(), 2)
+
+    # -- features, checks, user-only commands -------------------------------
+
+    def test_passes_must_be_true_or_false(self):
+        code, _out, err = self.file_tool("Edit", "feature_list.json",
+                                         old_string='"passes": false', new_string='"passes": 1')
+        self.assertEqual(code, 2)
+        self.assertIn("true or false", err)
+        self.assert_stop_passes()
+        changed = json.loads(json.dumps(FEATURES))
+        changed["features"][0]["passes"] = 1
+        self.write("feature_list.json", json.dumps(changed))
+        self.assert_stop_blocks("true or false")
+        self.assertEqual(self.runs(self.full_counter), 0)
+
+    def test_a_passing_check_that_leaves_a_background_process_passes(self):
+        self.config["fast_checks"] = [{"name": "bg", "command": "sleep 20 & exit 0", "timeout_seconds": 3}]
+        self.save_config()
+        started = time.time()
+        self.assert_stop_passes()
+        self.assertLess(time.time() - started, 2.5)
+
+    def test_checks_that_exceed_the_hook_s_time_budget_block(self):
+        self.config["fast_checks"] = [{"name": "a", "command": "sleep 2", "timeout_seconds": 60},
+                                      {"name": "b", "command": "sleep 2", "timeout_seconds": 60}]
+        self.save_config()
+        env = dict(self.env, VBL_STOP_BUDGET_SECONDS="3")
+        code, _out, err = self.hook("stop_check.py", {"stop_hook_active": False, "cwd": self.root}, env=env)
+        self.assertEqual(code, 2)
+        self.assertIn("time budget", err)
+
+    def test_the_user_only_commands_refuse_without_a_terminal(self):
+        self.assert_stop_passes()
+        for args in (("relock",), ("unlock", "tests/test_calc.py")):
+            result = self.user_command(*args, tty=False)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("terminal", result.stdout)
+        self.assertTrue(os.path.isfile(self.path(".claude/verify-lock.json")))
+        self.assertEqual(json.loads(self.read(".claude/verify.json"))["protected"], ["tests/test_calc.py"])
+
+    def test_an_edit_that_the_hook_cannot_simulate_on_a_guarded_json_file_is_blocked(self):
+        for relative in (".claude/verify.json", "feature_list.json"):
+            code, _out, err = self.file_tool("Edit", relative, old_string="“name”: “unit”",
+                                             new_string='"name": "x"')
+            self.assertEqual(code, 2, relative)
+            self.assertIn("Write", err)
+
+    def test_the_hooks_write_no_cache_folder(self):
+        self.assert_stop_passes()
+        self.write_tool("src/calc.py")
+        self.hook("post_edit_lint.py", {"tool_name": "Edit", "tool_input": {"file_path": self.path("src/calc.py")}})
+        self.hook("plan_check.py", {"tool_name": "ExitPlanMode", "tool_input": {"plan": GOOD_PLAN}})
+        env = {key: value for key, value in self.env.items() if key != "PYTHONDONTWRITEBYTECODE"}
+        for script in ("stop_check.py", "protect_paths.py", "post_edit_lint.py", "plan_check.py"):
+            subprocess.run([sys.executable, self.path(".claude/hooks/" + script)], input="{}", cwd=self.root,
+                           env=env, capture_output=True, text=True, timeout=120)
+        self.assertFalse(os.path.exists(self.path(".claude/hooks/__pycache__")))
+
+
+class PlanGateReviewTests(PlanGateTests):
+    """Plan forms that the first version of the plan gate read wrongly."""
+
+    def test_plans_that_hold_both_parts_in_other_common_forms_pass(self):
+        plans = (
+            "1. Build.\n\n- **Acceptance checks**\n\n    ```bash\n    make test\n    ```\n\n- **Assumptions**: none\n",
+            "__Acceptance checks__\n- `make test` exits 0\n\n__Assumptions__\n- none\n",
+            "## Acceptance checks\n- `make test` exits 0\n\n## Steps\n1. Code.\n"
+            "2. Acceptance checks must pass before the commit.\n\n## Assumptions\n- none\n",
+            "## Acceptance checks\n```pytest -q```\n\n## Assumptions\nnone\n",
+            "Acceptance checks: `make test` exits 0\nAssumptions: none\n",
+        )
+        for text in plans:
+            with self.subTest(plan=text):
+                code, _out, err = self.plan(text)
+                self.assertEqual(code, 0, err)
+
+    def test_plans_with_an_empty_part_are_denied(self):
+        plans = (
+            "**Acceptance checks**\n- `make test`\n\n**Assumptions**\n\n**Steps**\n1. Code.\n",
+            "## Acceptance checks\n- `make test`\n\n## Assumptions\n\n---\n\nSome other text.\n",
+            "**Acceptance checks**\n\n**Files**\n- `src/app.py`\n\n**Assumptions**\n- none\n",
+            "## Acceptance checks\n- `make test`\n\n## Assumptions and risks\n",
+            "1. Acceptance checks will come later, see `notes.md`.\n\n## Assumptions\n- none\n",
+        )
+        for text in plans:
+            with self.subTest(plan=text):
+                self.assertEqual(self.plan(text)[0], 2)
 
 
 class PackageTests(unittest.TestCase):

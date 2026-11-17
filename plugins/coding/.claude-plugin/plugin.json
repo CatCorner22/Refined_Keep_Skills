@@ -1,0 +1,17 @@
+{
+  "name": "coding",
+  "version": "2.0.0",
+  "description": "Stack-agnostic software craft for Claude Code, in 7 skills: define the deliverable first, keep the architecture stable, test after every slice, write clean minimal code, and build the UI and the UX to a stated quality bar. Claude loads each skill on its own when the task fits.",
+  "author": {
+    "name": "CatCorner22"
+  },
+  "repository": "https://github.com/CatCorner22/Refined_Keep_Skills",
+  "keywords": [
+    "coding",
+    "testing",
+    "architecture",
+    "clean-code",
+    "ui",
+    "ux"
+  ]
+}

@@ -11,6 +11,7 @@ import os
 import shlex
 import sys
 
+sys.dont_write_bytecode = True  # keep a __pycache__ folder out of .claude/hooks/
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vbl_common as vbl  # noqa: E402
 
@@ -22,6 +23,8 @@ def main():
     if error or not config or not config.get("lint_on_edit"):
         return 0  # not set up, no lint command, or a broken config that the Stop hook reports
     lint = config["lint_on_edit"]
+    if not lint.get("command", "").strip():
+        return 0  # an empty command means no lint
     tool_input = hook_input.get("tool_input")
     if not isinstance(tool_input, dict):
         tool_input = {}

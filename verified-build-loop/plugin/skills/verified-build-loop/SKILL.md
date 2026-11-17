@@ -76,7 +76,7 @@ Run these and report the result of each:
 6. If the project has a user interface, the end-to-end check drives it the way a person would (for example Playwright for a web app). Unit tests alone do not prove that a feature works.
 7. Ask the user to confirm the commands before you write them anywhere. After Step 6, only the user can change or remove a check; Claude can only add one.
 
-Keep the fast checks fast. The Stop hook runs them on every turn that changes a project file. In a full setup, a suite that takes more than about 2 minutes belongs in the full checks. In a quick setup, the full checks never run, so every check goes in the fast checks. The Stop hook's own timeout is 1,800 seconds: keep the sum of the check timeouts below it.
+Keep the fast checks fast. The Stop hook runs them on every turn that changes a project file. In a full setup, a suite that takes more than about 2 minutes belongs in the full checks. In a quick setup, the full checks never run, so every check goes in the fast checks. The Stop hook gives the checks of 1 run 1,700 seconds in total, because its own timeout is 1,800 seconds. It reports a check that does not fit in that time as failed.
 
 ### Step 3. Write SPEC.md by interviewing the user (full setup only)
 
@@ -115,7 +115,7 @@ Write the files in this order. The order matters: once `.claude/verify.json` exi
 2. **Reviewer.** Copy `${CLAUDE_SKILL_DIR}/templates/reviewer.md` to `.claude/agents/reviewer.md`.
 3. **Settings.** Add the `hooks` object of `${CLAUDE_SKILL_DIR}/templates/settings-hooks.json` to `.claude/settings.json`. If the file exists, merge: keep every existing setting and every existing hook, and append these 4 hook groups to the lists of their events. If Step 1 found `python` and not `python3`, change the commands to match. Show the user the final file.
 4. **CLAUDE.md.** Add a section to CLAUDE.md (create the file if needed), with the real check commands filled in: `${CLAUDE_SKILL_DIR}/templates/CLAUDE-section-quick.md` for a quick setup, `${CLAUDE_SKILL_DIR}/templates/CLAUDE-section.md` for a full setup.
-5. **.gitignore.** Add 2 lines to .gitignore: `.claude/verify-lock.json` and `.claude/hooks/__pycache__/`. The lock holds timestamps that differ on each machine; each machine builds its own lock on its first Stop hook run. Python writes the cache folder when a hook runs.
+5. **.gitignore.** Add `.claude/verify-lock.json` to .gitignore. The lock holds timestamps that differ on each machine; each machine builds its own lock on its first Stop hook run. The hook scripts write no cache folder.
 6. **verify.json.** Copy `${CLAUDE_SKILL_DIR}/templates/verify.json` to `.claude/verify.json` and replace its example commands with the commands that the user confirmed in Step 2. In a quick setup, set `"full_checks": []`. Leave `"protected": []`; Phase 2 fills it. Leave `"fingerprint_exclude": []` unless the user names a folder of generated files that git tracks and that no check reads.
 
 ### Step 7. Smoke-test the hooks
@@ -188,7 +188,7 @@ Commit everything from Phase 1 in 1 commit with the message `Set up verified bui
 Use this when a hook blocks something that it should allow, allows something that it should block, or reports an internal error, or when a setup file is missing.
 
 1. Run the skill's tests: `python3 -B -m unittest discover -s "${CLAUDE_SKILL_DIR}/tests"`. A failure means that the scripts do not work on this machine; show the user the output.
-2. Compare each file in `.claude/hooks/` with the skill folder, using the `cmp` command of Step 6. A difference means that something changed the file, or that the skill was updated; tell the user which. Claude cannot replace these files while the hooks are active, because the hooks protect them. The user runs the `cp` command of Step 6 in a terminal, then runs `python3 .claude/hooks/vbl_common.py relock`.
+2. Compare each file in `.claude/hooks/` with the skill folder, using the `cmp` command of Step 6. A difference means that something changed the file, or that the skill was updated; tell the user which. Claude cannot replace these files while the hooks are active, because the hooks protect them. The user runs the `cp` command of Step 6 in a terminal, then runs `python3 .claude/hooks/vbl_common.py relock`. In a cloud session, the user replaces the files in a commit and starts a new session.
 3. If `.claude/verify.json` is missing, rebuild it from Phase 1, Step 2, and show it to the user before you write it.
 4. If `.claude/verify.json` is malformed, the Stop hook names each problem. Fix the file; if a hook blocks the fix, ask the user to fix it.
 
@@ -196,7 +196,8 @@ Use this when a hook blocks something that it should allow, allows something tha
 
 - **The code is wrong:** fix the code. That is the normal case.
 - **The test is wrong** (it tests something that the user did not ask for, or it has a defect): if the test is protected, stop. Tell the user which test, which line, and why. Only the user can unprotect it, with `python3 .claude/hooks/vbl_common.py unlock <path>`.
-- **You changed a protected file by accident** (for example a formatter rewrote it): put it back with `git restore <path>`. The hooks allow that 1 command form.
+- **You changed a protected file by accident** (for example a formatter rewrote it): put it back with `git checkout HEAD -- <path>`, as the only command of the call. The hooks allow that form and `git restore --source=HEAD --staged --worktree -- <path>`. Both take the content of the last commit. The hooks block every other form, because a plain `git restore <path>` takes the content from the index.
+- **A new file appeared in a protected folder:** if a tool generated it (a snapshot, a report), add its folder to .gitignore; the Stop hook leaves a new file alone when git ignores it. Otherwise stop and ask the user.
 - **The environment is broken** (a missing dependency, a service that is not running): fix the environment if it is inside the project. Otherwise stop and tell the user exactly what is missing.
 - **You must stop to ask the user something while a check fails:** say so plainly in your reply, and say which check fails and why. The Stop hook blocks 2 times and then lets the turn end with a message to the user.
 - **The same failure repeats:** after 3 identical failures in a row in 1 turn, the Stop hook lets the turn end and shows the user a message with the failing output. Do not hide this. Explain what you tried.
@@ -212,14 +213,20 @@ The PreToolUse hook blocks Claude from running these. The user runs them in a te
 
 To change a check or a setting in `.claude/verify.json`, the user edits the file and then runs `relock`.
 
+Both commands refuse to run without a terminal on their input, so a command that Claude starts cannot run them.
+
+**In a cloud session the user has no terminal.** There, the user changes the file in a commit (on GitHub, or in a local clone) and starts a new session. A new session clones the repository and builds a new lock from the committed files, so it needs no `relock`.
+
+**To remove the loop from a project,** the user deletes `.claude/verify.json` and `.claude/verify-lock.json`, removes the 4 hook groups from `.claude/settings.json`, and deletes `.claude/hooks/`. While the lock exists, a missing `verify.json` blocks every turn.
+
 ## What each hook enforces
 
 | Hook | When it runs | What it blocks |
 |---|---|---|
-| PreToolUse (`protect_paths.py`) | Before every Write, Edit, NotebookEdit and Bash call | Writes to protected files, the hook files, `.claude/settings.json`, the reviewer and the lock; feature-list changes other than `passes` or a new failing feature; verify.json changes other than a new check or a new protected path; Bash commands that name a protected path and also write, move or delete; the user-only commands |
+| PreToolUse (`protect_paths.py`) | Before every Write, Edit, NotebookEdit and Bash call | Writes to protected files, the hook files, `.claude/settings.json`, the reviewer and the lock, under any name for the path (letter case, a symbolic link); feature-list changes other than `passes` or a new failing feature; verify.json changes other than a new check or a new protected path; an edit to either file whose result the hook cannot work out; Bash commands that name a protected path and also write, move or delete; the user-only commands. The hook files, the settings and the lock stay protected when verify.json is missing or malformed. |
 | PreToolUse (`plan_check.py`) | When Claude presents a plan in plan mode | A plan with no "Acceptance checks" part that names a command, or with no "Assumptions" part. The user turns it off with `"plan_gate": false`. |
 | PostToolUse (`post_edit_lint.py`) | After every Write and Edit call | Nothing (the edit already happened). It shows the lint errors to Claude. |
-| Stop (`stop_check.py`) | Each time Claude tries to end a turn | Ending the turn while: a protected file, a check, a setting or a feature changed against the rules (by any route, scripts included); verify.json is malformed; any fast check fails; or a feature changed to `"passes": true` and any full check fails |
+| Stop (`stop_check.py`) | Each time Claude tries to end a turn | Ending the turn while: a protected file, a check, a setting or a feature changed against the rules (by any route, scripts included); a new file that git does not ignore appeared in a path that was already protected; verify.json is malformed, or missing while the lock exists; the hook itself failed; any fast check fails; or a feature changed to `"passes": true` and any full check fails |
 
 The Stop hook skips the checks when no project file changed since the last passing run. Claude Code itself ends the turn after 8 consecutive blocks with no tool call in between.
 
@@ -228,13 +235,15 @@ The Stop hook skips the checks when no project file changed since the last passi
 | Situation | What happens | What to do |
 |---|---|---|
 | The PreToolUse hook blocks a Bash command by mistake (for example `cp tests/test_a.py /tmp/`, or a heredoc whose text mentions a user-only command) | The hook reads the whole command text. It blocks any write-type command that names a protected path, and any command that names a user-only command | Split the command so that the protected path and the write are separate, read the file, or write the text with the Write tool |
-| Claude changes a protected file through a route that the PreToolUse hook cannot see (a script, a formatter, `git stash`) | The Stop hook's hash check blocks | Run `git restore <path>`, or ask the user |
+| Claude changes a protected file through a route that the PreToolUse hook cannot see (a script, a formatter, `git stash`) | The Stop hook's hash check blocks | Run `git checkout HEAD -- <path>` as the only command of the call, or ask the user |
+| A tool writes a new file into a protected folder (a snapshot, a report) | The Stop hook blocks, unless git ignores the file | Add the folder of the generated files to .gitignore; for any other new file, ask the user |
 | Something deletes the lock, or the session runs in a fresh clone (every cloud session does) | The next Stop hook run treats the project as new: it records the current state and runs the fast checks once | Nothing. In a fresh clone, the committed files are the trusted state. |
 | A check reports problems in a protected file | Claude cannot fix the file, so the check fails on every turn | Exclude `.claude/` from checks (Step 2); for a protected test, ask the user to unlock it |
 | The fast checks are slow | Every turn that changes a project file waits for them | The user moves slow checks to the full checks (full setup) or narrows them, then runs `relock` |
 | A file changes on every tool call (a log, a cache) | If git does not ignore it, the checks run on every turn | Add it to .gitignore |
 | An ignored file matters to the checks (for example a local `.env`) | A change to it alone does not rerun the checks | Run the fast checks by hand after you change it |
-| The Stop hook reports an internal error | It blocks once, so that Claude tells the user; then it lets the turn end with a message. The checks did not run. | Run the checks by hand; run Phase 3 |
+| The Stop hook reports an internal error | It blocks on every attempt, and the checks do not run. Claude Code ends the turn after 8 consecutive blocks. | Tell the user in plain words; run the checks by hand; run Phase 3 |
+| The user wants to run a user-only command in a cloud session | A cloud session gives the user no terminal, and the commands refuse to run without one | The user makes the change in a commit and starts a new session (see "User-only commands") |
 | Python is missing on the machine | The hooks fail; Claude Code treats a failed command hook as a non-blocking error, so the action proceeds unchecked | Install Python 3.8 or later; run Step 7 again |
 | The project has other hooks (for example the agent-discipline hooks) | All hooks of an event run; any of them can block | Keep both sets in `.claude/settings.json`. Step 6 merges them. |
 | Windows | Tested on Linux. Check commands run through the shell; quoting in `lint_on_edit` uses POSIX rules | Run the Step 7 smoke test before you rely on the hooks |

@@ -446,16 +446,21 @@ The details are in `CHANGELOG.md`. In summary:
 
 ## 12. Other packages in this repository
 
-The marketplace file `.claude-plugin/marketplace.json` lists 3 plugins. After `/plugin marketplace add CatCorner22/Refined_Keep_Skills`, install the ones that you want:
+The marketplace file `.claude-plugin/marketplace.json` lists 6 plugins. After `/plugin marketplace add CatCorner22/Refined_Keep_Skills`, install the ones that you want:
 
 | Plugin | Install command | Source folder |
 |---|---|---|
 | `agent-discipline` | `/plugin install agent-discipline@refined-keep-skills` | the root of this repository (sections 1 to 11) |
 | `verified-build-loop` | `/plugin install verified-build-loop@refined-keep-skills` | `verified-build-loop/plugin/` |
 | `chicken-little-overwatch` | `/plugin install chicken-little-overwatch@refined-keep-skills` | `chicken-little-overwatch/chicken-little-overwatch/` |
+| `coding` | `/plugin install coding@refined-keep-skills` | `plugins/coding/` |
+| `plain-language` | `/plugin install plain-language@refined-keep-skills` | `plugins/plain-language/` |
+| `red-team` | `/plugin install red-team@refined-keep-skills` | `plugins/red-team/` |
 
-`verified-build-loop/` holds the verified build loop: 1 plugin and 1 skill that install 4 enforcement hooks in a project (a plan gate, a lint check after each edit, a Stop hook that blocks the end of a turn while a check fails, and protection of tests). That folder stands alone. It has its own `README.md`, build tool, tests and upload zip.
+`verified-build-loop/` holds the verified build loop: 1 plugin and 1 skill that install 4 enforcement hooks in a project (a plan gate, a lint check after each edit, a Stop hook that blocks the end of a turn while a check fails, and protection of tests). That folder stands alone. It has its own `README.md`, build tool, tests and upload zips.
 
-This repository uses its own tools. `.claude/settings.json` turns on the hooks of section 8 and the 4 hooks of the verified build loop, `.claude/hooks/` holds the loop's scripts, and `.claude/verify.json` lists the 5 checks that must pass before Claude can end a turn. `tests/test_project_setup.py` keeps those installed copies equal to their sources. To turn every hook off, delete `.claude/settings.json`.
+`plugins/` holds 3 Claude Code builds of skills that the owner already had in another form: `coding` (7 software-craft skills), `plain-language` (`unambiguous-language` and `one-way-optimal-language`) and `red-team` (`red-team-lead`). A build script generates the first 2 from `CatCorner22/Cursor_Skills`. `plugins/README.md` lists every change that the build makes.
+
+This repository uses its own tools. `.claude/settings.json` turns on the hooks of section 8 and the 4 hooks of the verified build loop, `.claude/hooks/` holds the loop's scripts, and `.claude/verify.json` lists the checks that must pass before Claude can end a turn. `tests/test_project_setup.py` keeps those installed copies equal to their sources. To turn every hook off, delete `.claude/settings.json`.
 
 `chicken-little-overwatch/` holds Chicken Little Overwatch: 1 plugin and 1 skill for quality control and red-team review of LLM-assisted work. That folder stands alone. It has its own `README.md`, build tool, tests and packages, and the 18 skills and the build tool described above do not read it.

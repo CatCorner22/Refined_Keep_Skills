@@ -25,10 +25,11 @@ plugin/.claude-plugin/plugin.json            the plugin manifest
 plugin/skills/verified-build-loop/SKILL.md   the skill: setup, the 2 work loops, repair
 plugin/skills/verified-build-loop/scripts/   the 5 hook scripts
 plugin/skills/verified-build-loop/templates/ the files that setup copies into a project
-plugin/skills/verified-build-loop/tests/     64 tests of the 5 scripts
+plugin/skills/verified-build-loop/tests/     97 tests of the 5 scripts
 tools/build.py                               builds and checks the upload zip
-tests/test_package.py                        4 tests of the zip, the manifest and the marketplace entry
-dist/verified-build-loop.zip                 the upload package for claude.ai (generated)
+tests/test_package.py                        5 tests of the zips, the manifest and the marketplace entry
+dist/verified-build-loop.zip                 the skill alone, as an upload package (generated)
+dist/verified-build-loop-plugin.zip          the plugin, as an upload package (generated)
 backup/original-SKILL.md                     version 1, as the claude.ai account held it on 2026-11-17
 ```
 
@@ -38,7 +39,7 @@ Use 1 route in each environment. A skill installed through 2 routes loads 2 time
 
 | Route | Steps | Where the skill then loads |
 |---|---|---|
-| claude.ai account | In the claude.ai settings, remove the old `verified-build-loop` skill, then upload `dist/verified-build-loop.zip` | Every Claude Code cloud session and claude.ai. The skill only works where Claude can run commands. |
+| claude.ai account | In the claude.ai settings, remove the old `verified-build-loop` upload, then upload `dist/verified-build-loop-plugin.zip` (the plugin) or `dist/verified-build-loop.zip` (the skill alone), whichever form the upload page accepts. This repository has not verified the upload step. | Every Claude Code cloud session and claude.ai. The skill only works where Claude can run commands. |
 | Claude Code plugin | `/plugin marketplace add CatCorner22/Refined_Keep_Skills`, then `/plugin install verified-build-loop@refined-keep-skills` | Local Claude Code sessions, as `/verified-build-loop:verified-build-loop` |
 | Project skill | Copy `plugin/skills/verified-build-loop/` into `.claude/skills/` of a repository and commit it | Sessions in that repository, cloud sessions included |
 
@@ -52,18 +53,39 @@ Version 1 is the skill that the claude.ai account held: 1 `SKILL.md` of 1,043 li
 
 | Finding in version 1 | What version 2 does |
 |---|---|
-| Setup had Claude retype 653 lines of Python from the appendix, because the uploaded skill held no `scripts/` folder | The skill ships the scripts. Setup copies them with `cp` and confirms each copy with `cmp`. `SKILL.md` has 271 lines. |
+| Setup had Claude retype 653 lines of Python from the appendix, because the uploaded skill held no `scripts/` folder | The skill ships the scripts. Setup copies them with `cp` and confirms each copy with `cmp`. `SKILL.md` has 280 lines. |
 | Claude could add a folder to `fingerprint_exclude` in `verify.json`. Changes in that folder then never reran the checks, so Claude could end a turn with broken code. | Only the user can change `fingerprint_exclude`, `feature_list` and `plan_gate`. A missing key counts as its default. |
-| A failing check that printed a byte that is not UTF-8 crashed the Stop hook. Claude Code treats a crashed hook as a non-blocking error, so the turn ended unchecked. | Output is decoded leniently. Any other internal error blocks once, so that Claude tells the user, and then ends the turn with a message to the user. |
+| A failing check that printed a byte that is not UTF-8 crashed the Stop hook. Claude Code treats a crashed hook as a non-blocking error, so the turn ended unchecked. | Output is decoded leniently. Any other internal error blocks on every attempt; Claude Code itself ends a turn after 8 consecutive blocks. |
 | A malformed `verify.json` (for example a list) crashed the Stop hook in the same way | The Stop hook names each malformed part and blocks |
 | A file that git ignores (a log, a cache) changed the fingerprint, so the checks ran on every turn. A tracked file in `dist/`, `build/` or `target/` did not count, so a change there never ran the checks. | In a git repository, the project files are the files that git does not ignore |
-| The integrity message told Claude to restore a protected file with git, and the PreToolUse hook blocked `git restore <path>` | A lone `git restore <path>` or `git checkout [HEAD] -- <path>` is allowed. Every other form stays blocked. |
+| The integrity message told Claude to restore a protected file with git, and the PreToolUse hook blocked every `git restore` and `git checkout` that named the file | A lone `git checkout HEAD -- <path>` or `git restore --source=HEAD --staged --worktree -- <path>` is allowed. Both take the content of the last commit. Every other form stays blocked. |
 | The unlock command, given a pattern such as `tests/*`, left the hashes of its files in the lock, so the next Stop reported them as missing. Given a path that was not in the list, it printed "Unprotected". | The Stop hook forgets hashes that no pattern covers. The unlock command reports a path that is not in the list. |
 | A timed-out check left its child processes running | The check runs in its own process group, and a timeout stops the group |
 | Nothing made a plan name its checks | The plan gate (new) |
 | Setup always needed a specification interview and a feature list | A quick setup installs the checks and hooks only. The task loop (Phase 2A) needs no feature list. |
 
-42 of the 43 tests that shipped with version 1 pass against the version 2 scripts. The 1 that does not pass asserts that `git checkout -- <protected path>` is blocked, which version 2 allows on purpose.
+### Findings of the independent review of version 2
+
+Before release, a reviewer with no knowledge of the design attacked the version 2 scripts. It reproduced 12 defects. Each one now has a test, and the scripts pass all of them.
+
+| Finding in the first version 2 scripts | What the scripts do now |
+|---|---|
+| Deleting `verify.json`, or making it malformed, switched every hook off | While the lock exists, a missing `verify.json` blocks the turn. The hook files, the settings and the lock stay protected when `verify.json` is missing or malformed. |
+| A path through a symbolic link to the project folder got past the PreToolUse hook, the lock included | The hook resolves symbolic links and ignores letter case. A lock with no configuration snapshot is not usable. |
+| Deeply nested JSON, a folder in place of the feature list, a NUL character in a command, or an infinite timeout crashed the Stop hook, and on the next attempt the turn ended unchecked | Each of these is now a reported problem that blocks. An internal error blocks on every attempt. |
+| A protected file under a folder named `build`, `dist` or `target` was never hashed | The search for protected files skips only git's data, caches and installed dependencies |
+| A new file in a protected folder (for example `tests/conftest.py`) was accepted in silence | A new file in a path that was already protected blocks, unless git ignores the file |
+| `"passes": 1` skipped the full checks | `passes` must be `true` or `false` |
+| A change inside a nested git repository did not rerun the checks | The fingerprint looks inside a folder that git lists as 1 entry |
+| A glob or a quoting trick ran the user-only commands | The commands refuse to run without a terminal on their input |
+| A named pipe in a protected folder hung the Stop hook | The hook hashes regular files only and reports any other kind |
+| A passing check that left a background process always "timed out" | The check's output goes to a temporary file, so the check ends when its shell ends |
+| `git restore <path>` took the content from the index, and brace expansion hid a `--source` option | Only the 2 forms above are allowed, and a command with braces is not a plain restore |
+| The plan gate denied 4 valid plan forms and passed 4 plans with an empty part | The gate reads indented fences, underscore bold and 1-line fences; a part ends at a bold-only line or a horizontal rule; a sentence that starts with a label word is not a label |
+
+The review also suspected 3 defects without reproducing them. The scripts now cover each: an edit to `verify.json` or to the feature list whose result the hook cannot work out is blocked; path matching ignores letter case; and the Stop hook gives the checks of 1 run 1,700 seconds in total, under its own timeout of 1,800 seconds.
+
+40 of the 43 tests that shipped with version 1 pass against the version 2 scripts. The 3 that do not pass assert behaviour that version 2 changes on purpose: 2 run the user-only commands without a terminal, and 1 expects the hook to allow an edit whose result it cannot work out.
 
 ## 4. Limits
 
@@ -72,6 +94,9 @@ Version 1 is the skill that the claude.ai account held: 1 `SKILL.md` of 1,043 li
 - The Bash rule of the PreToolUse hook is a heuristic. It reads the whole command text, so it also blocks a command whose text merely mentions a user-only command or a protected path next to a write command. The Stop hook's hash check is the backstop.
 - A program that can run code can find a way around local hooks. The reviewer, the git history and your review of the diff are the backstop.
 - The lock is local and git ignores it. A fresh clone, which every cloud session is, rebuilds the lock and runs the fast checks at the first Stop.
+- The lock is the record that the Stop hook trusts. A program that rewrites the lock and the protected files consistently defeats the integrity check.
+- The user-only commands need a terminal. A cloud session gives the user none: there, the user changes a protected file in a commit and starts a new session.
+- Protection covers the paths that the `protected` list names. A new file outside those paths (for example a `conftest.py` next to a protected test file) can still change what a test does.
 - An ignored file that matters to a check (for example a local `.env`) does not rerun the checks when it alone changes.
 - The scripts are tested on Linux with Python 3.13. They target Python 3.8 or later. They are not tested on Windows.
 

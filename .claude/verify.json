@@ -24,6 +24,11 @@
       "name": "chicken-little-overwatch-tests",
       "command": "python3 -B -m unittest discover -s chicken-little-overwatch/tests",
       "timeout_seconds": 300
+    },
+    {
+      "name": "claude-code-plugins-tests",
+      "command": "python3 -B -m unittest discover -s plugins/tests",
+      "timeout_seconds": 300
     }
   ],
   "full_checks": [],

@@ -17,7 +17,7 @@ def load_build():
 
 
 class PackageTests(unittest.TestCase):
-    def test_the_zip_matches_the_skill_folder(self):
+    def test_each_zip_matches_its_folder(self):
         self.assertEqual(load_build().check(), [])
 
     def test_the_zip_has_one_top_folder_with_the_skill_file(self):
@@ -26,6 +26,17 @@ class PackageTests(unittest.TestCase):
         self.assertIn("verified-build-loop/SKILL.md", names)
         self.assertEqual({name.split("/")[0] for name in names}, {"verified-build-loop"})
         for needed in ("scripts/stop_check.py", "scripts/plan_check.py", "templates/verify.json", "tests/test_vbl.py"):
+            self.assertIn("verified-build-loop/" + needed, names)
+        self.assertFalse([name for name in names if "__pycache__" in name or name.endswith(".pyc")])
+
+
+class PluginZipTests(unittest.TestCase):
+    def test_the_plugin_zip_has_one_top_folder_with_the_manifest_and_the_skill(self):
+        with zipfile.ZipFile(os.path.join(PACKAGE, "dist", "verified-build-loop-plugin.zip")) as archive:
+            names = archive.namelist()
+        self.assertEqual({name.split("/")[0] for name in names}, {"verified-build-loop"})
+        for needed in (".claude-plugin/plugin.json", "skills/verified-build-loop/SKILL.md",
+                       "skills/verified-build-loop/scripts/stop_check.py"):
             self.assertIn("verified-build-loop/" + needed, names)
         self.assertFalse([name for name in names if "__pycache__" in name or name.endswith(".pyc")])
 
