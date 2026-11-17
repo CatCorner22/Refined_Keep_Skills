@@ -1,0 +1,27 @@
+{
+  "fast_checks": [
+    {
+      "name": "unit",
+      "command": "python3 -m pytest -x -q",
+      "timeout_seconds": 600
+    }
+  ],
+  "full_checks": [
+    {
+      "name": "all-tests",
+      "command": "python3 -m pytest -q",
+      "timeout_seconds": 1200
+    }
+  ],
+  "lint_on_edit": {
+    "command": "ruff check {file}",
+    "extensions": [
+      ".py"
+    ],
+    "timeout_seconds": 120
+  },
+  "protected": [],
+  "feature_list": "feature_list.json",
+  "fingerprint_exclude": [],
+  "plan_gate": true
+}

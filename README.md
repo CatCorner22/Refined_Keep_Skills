@@ -446,4 +446,16 @@ The details are in `CHANGELOG.md`. In summary:
 
 ## 12. Other packages in this repository
 
+The marketplace file `.claude-plugin/marketplace.json` lists 3 plugins. After `/plugin marketplace add CatCorner22/Refined_Keep_Skills`, install the ones that you want:
+
+| Plugin | Install command | Source folder |
+|---|---|---|
+| `agent-discipline` | `/plugin install agent-discipline@refined-keep-skills` | the root of this repository (sections 1 to 11) |
+| `verified-build-loop` | `/plugin install verified-build-loop@refined-keep-skills` | `verified-build-loop/plugin/` |
+| `chicken-little-overwatch` | `/plugin install chicken-little-overwatch@refined-keep-skills` | `chicken-little-overwatch/chicken-little-overwatch/` |
+
+`verified-build-loop/` holds the verified build loop: 1 plugin and 1 skill that install 4 enforcement hooks in a project (a plan gate, a lint check after each edit, a Stop hook that blocks the end of a turn while a check fails, and protection of tests). That folder stands alone. It has its own `README.md`, build tool, tests and upload zip.
+
+This repository uses its own tools. `.claude/settings.json` turns on the hooks of section 8 and the 4 hooks of the verified build loop, `.claude/hooks/` holds the loop's scripts, and `.claude/verify.json` lists the 5 checks that must pass before Claude can end a turn. `tests/test_project_setup.py` keeps those installed copies equal to their sources. To turn every hook off, delete `.claude/settings.json`.
+
 `chicken-little-overwatch/` holds Chicken Little Overwatch: 1 plugin and 1 skill for quality control and red-team review of LLM-assisted work. That folder stands alone. It has its own `README.md`, build tool, tests and packages, and the 18 skills and the build tool described above do not read it.
